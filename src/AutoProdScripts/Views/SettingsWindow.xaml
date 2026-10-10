@@ -9,20 +9,22 @@
         ResizeMode="CanResizeWithGrip">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <Button Content="Отмена" Click="Cancel_Click" Background="#3C3C3C" Width="100"/>
+      <Button Content="Отмена" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Width="100"/>
       <Button Content="Сохранить и открыть" Click="Save_Click" Width="160" Margin="8,0,0,0"/>
     </StackPanel>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel>
-        <TextBlock Text="1. Путь к ProductionScripts" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <TextBlock Text="1. Путь к ProductionScripts" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
+                   Foreground="{StaticResource FgBrush}"/>
         <DockPanel Margin="0,0,0,4">
           <Button DockPanel.Dock="Right" Content="Обзор…" Click="Browse_Click" Width="90" Margin="8,0,0,0"/>
           <TextBox x:Name="ProjectPathBox" />
         </DockPanel>
-        <TextBlock x:Name="ProjectPathHint" Text="" Foreground="#9CDCFE" Margin="0,0,0,16" TextWrapping="Wrap"/>
+        <TextBlock x:Name="ProjectPathHint" Text="" Foreground="{StaticResource FgInfoBrush}" Margin="0,0,0,16" TextWrapping="Wrap"/>
 
-        <TextBlock Text="2. Azure DevOps" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <TextBlock Text="2. Azure DevOps" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
+                   Foreground="{StaticResource FgBrush}"/>
         <Label Content="Org / URL"/>
         <TextBox x:Name="OrgUrlBox" Text="https://cit-damu.visualstudio.com/"/>
         <Grid Margin="0,8,0,0">
@@ -45,13 +47,14 @@
           <Button DockPanel.Dock="Right" Content="Проверить…" Click="ValidatePat_Click" Width="110" Margin="8,0,0,0"/>
           <PasswordBox x:Name="PatBox"/>
         </DockPanel>
-        <TextBlock x:Name="PatHint" Text="Auth: PAT (MVP). Секрет хранится в Credential Manager / DPAPI." Foreground="#888888" Margin="0,4,0,16" TextWrapping="Wrap"/>
+        <TextBlock x:Name="PatHint" Text="Auth: PAT (MVP). Секрет хранится в Credential Manager / DPAPI." Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,16" TextWrapping="Wrap"/>
 
-        <TextBlock Text="3. Git (нужен Git for Windows в PATH)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"/>
-        <TextBlock x:Name="GitHint" Text="" Foreground="#9CDCFE" Margin="0,0,0,8" TextWrapping="Wrap"/>
+        <TextBlock Text="3. Git (нужен Git for Windows в PATH)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
+                   Foreground="{StaticResource FgBrush}"/>
+        <TextBlock x:Name="GitHint" Text="" Foreground="{StaticResource FgInfoBrush}" Margin="0,0,0,8" TextWrapping="Wrap"/>
         <Label Content="Базовая ветка"/>
         <ComboBox x:Name="BaseBranchBox" IsEditable="True"/>
-        <TextBlock Text="Выбор сохраняется между запусками." Foreground="#888888" Margin="0,4,0,0"/>
+        <TextBlock Text="Выбор сохраняется между запусками." Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,0"/>
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

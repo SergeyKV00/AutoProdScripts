@@ -7,6 +7,7 @@ using AutoProdScripts.Models;
 using AutoProdScripts.Services.AzureDevOps;
 using AutoProdScripts.Services.Discovery;
 using AutoProdScripts.Services.Git;
+using AutoProdScripts.Themes;
 using AutoProdScripts.Views;
 using ICSharpCode.AvalonEdit.Highlighting;
 
@@ -258,9 +259,9 @@ public partial class MainWindow : Window
 
         try
         {
-            SqlEditor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("TSQL")
-                                           ?? HighlightingManager.Instance.GetDefinition("SQL")
-                                           ?? HighlightingManager.Instance.GetDefinition("C#");
+            SqlEditor.SyntaxHighlighting = SqlHighlightingLoader.GetDefinition()
+                                           ?? HighlightingManager.Instance.GetDefinition("TSQL")
+                                           ?? HighlightingManager.Instance.GetDefinition("SQL");
             SqlEditor.Load(path);
             _currentFilePath = path;
             _dirty = false;

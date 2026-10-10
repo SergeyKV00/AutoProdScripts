@@ -1,6 +1,7 @@
 using System.Windows;
 using AutoProdScripts.Services.Logging;
 using AutoProdScripts.Services.Settings;
+using AutoProdScripts.Themes;
 
 namespace AutoProdScripts;
 
@@ -13,6 +14,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         Settings.Load();
+        _ = SqlHighlightingLoader.GetDefinition();
         Log.Info("Приложение запущено.");
     }
 }

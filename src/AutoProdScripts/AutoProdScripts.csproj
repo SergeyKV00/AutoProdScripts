@@ -21,4 +21,8 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\SqlMutedDark.xshd" />
+  </ItemGroup>
+
 </Project>

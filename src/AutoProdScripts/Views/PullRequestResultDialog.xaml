@@ -10,12 +10,14 @@
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
       <Button x:Name="OpenButton" Content="Открыть в браузере" Click="Open_Click" Width="160"/>
-      <Button Content="Копировать" Click="Copy_Click" Width="110" Margin="8,0,0,0" Background="#3C3C3C"/>
-      <Button Content="Закрыть" Click="Close_Click" Width="100" Margin="8,0,0,0" Background="#3C3C3C"/>
+      <Button Content="Копировать" Click="Copy_Click" Width="110" Margin="8,0,0,0" Style="{StaticResource SecondaryButton}"/>
+      <Button Content="Закрыть" Click="Close_Click" Width="100" Margin="8,0,0,0" Style="{StaticResource SecondaryButton}"/>
     </StackPanel>
     <StackPanel>
-      <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-      <TextBlock x:Name="StatusText" Margin="0,8,0,0" TextWrapping="Wrap"/>
+      <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"
+                 Foreground="{StaticResource FgBrush}"/>
+      <TextBlock x:Name="StatusText" Margin="0,8,0,0" TextWrapping="Wrap"
+                 Foreground="{StaticResource FgBrush}"/>
       <Label Content="Ссылка:" Margin="0,16,0,0"/>
       <TextBox x:Name="UrlBox" IsReadOnly="True" TextWrapping="Wrap" Height="60"/>
     </StackPanel>
