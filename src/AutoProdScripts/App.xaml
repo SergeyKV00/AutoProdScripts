@@ -213,5 +213,95 @@
     <Style TargetType="Separator">
       <Setter Property="Background" Value="{StaticResource BorderBrush}"/>
     </Style>
+
+    <!-- Тонкий скролл всего приложения: без стрелок, в цветах темы -->
+    <Style x:Key="ThinScrollPageButton" TargetType="RepeatButton">
+      <Setter Property="OverridesDefaultStyle" Value="True"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="IsTabStop" Value="False"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RepeatButton">
+            <Border Background="Transparent"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="ThinScrollThumb" TargetType="Thumb">
+      <Setter Property="OverridesDefaultStyle" Value="True"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="IsTabStop" Value="False"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Thumb">
+            <Border x:Name="ThumbBorder"
+                    Background="#5A5A5A"
+                    CornerRadius="3"
+                    Margin="1"/>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="ThumbBorder" Property="Background" Value="#7A7A7A"/>
+              </Trigger>
+              <Trigger Property="IsDragging" Value="True">
+                <Setter TargetName="ThumbBorder" Property="Background" Value="#8FB8D4"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <ControlTemplate x:Key="ThinVerticalScrollBar" TargetType="ScrollBar">
+      <Grid Background="Transparent" Width="8">
+        <Track x:Name="PART_Track" IsDirectionReversed="True" Focusable="False">
+          <Track.DecreaseRepeatButton>
+            <RepeatButton Style="{StaticResource ThinScrollPageButton}" Command="ScrollBar.PageUpCommand"/>
+          </Track.DecreaseRepeatButton>
+          <Track.IncreaseRepeatButton>
+            <RepeatButton Style="{StaticResource ThinScrollPageButton}" Command="ScrollBar.PageDownCommand"/>
+          </Track.IncreaseRepeatButton>
+          <Track.Thumb>
+            <Thumb Style="{StaticResource ThinScrollThumb}" MinHeight="28"/>
+          </Track.Thumb>
+        </Track>
+      </Grid>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="ThinHorizontalScrollBar" TargetType="ScrollBar">
+      <Grid Background="Transparent" Height="8">
+        <Track x:Name="PART_Track" Focusable="False">
+          <Track.DecreaseRepeatButton>
+            <RepeatButton Style="{StaticResource ThinScrollPageButton}" Command="ScrollBar.PageLeftCommand"/>
+          </Track.DecreaseRepeatButton>
+          <Track.IncreaseRepeatButton>
+            <RepeatButton Style="{StaticResource ThinScrollPageButton}" Command="ScrollBar.PageRightCommand"/>
+          </Track.IncreaseRepeatButton>
+          <Track.Thumb>
+            <Thumb Style="{StaticResource ThinScrollThumb}" MinWidth="28"/>
+          </Track.Thumb>
+        </Track>
+      </Grid>
+    </ControlTemplate>
+
+    <Style x:Key="ThinScrollBar" TargetType="ScrollBar">
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="OverridesDefaultStyle" Value="True"/>
+      <Setter Property="Width" Value="8"/>
+      <Setter Property="MinWidth" Value="8"/>
+      <Setter Property="Template" Value="{StaticResource ThinVerticalScrollBar}"/>
+      <Style.Triggers>
+        <Trigger Property="Orientation" Value="Horizontal">
+          <Setter Property="Width" Value="Auto"/>
+          <Setter Property="MinWidth" Value="0"/>
+          <Setter Property="Height" Value="8"/>
+          <Setter Property="MinHeight" Value="8"/>
+          <Setter Property="Template" Value="{StaticResource ThinHorizontalScrollBar}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinScrollBar}"/>
   </Application.Resources>
 </Application>

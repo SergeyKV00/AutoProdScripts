@@ -19,7 +19,7 @@
         <MenuItem Header="Найти…" IsEnabled="False"/>
       </MenuItem>
       <MenuItem Header="Git">
-        <MenuItem Header="Sync (fetch)" Click="Sync_Click"/>
+        <MenuItem Header="Sync" Click="Sync_Click"/>
         <MenuItem Header="Новая ветка…" Click="NewBranch_Click"/>
         <MenuItem Header="Статус" Click="Status_Click"/>
       </MenuItem>
@@ -31,7 +31,7 @@
 
     <ToolBarTray DockPanel.Dock="Top" Background="{StaticResource PanelBrush}">
       <ToolBar>
-        <Button Content="↻ Sync" Click="Sync_Click" ToolTip="git fetch"/>
+        <Button Content="↻ Sync" Click="Sync_Click" ToolTip="Подтянуть файлы текущей ветки"/>
         <Button Content="⎇ Новая ветка" Click="NewBranch_Click"/>
         <Button Content="📄 Новый скрипт" Click="NewScript_Click"/>
         <Separator/>
@@ -55,33 +55,38 @@
     </StatusBar>
 
     <Grid>
-      <Grid.RowDefinitions>
-        <RowDefinition Height="*"/>
-        <RowDefinition Height="6"/>
-        <RowDefinition Height="140"/>
-      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" MinWidth="320"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="280" MinWidth="200"/>
+      </Grid.ColumnDefinitions>
 
-      <Grid Grid.Row="0">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="260" MinWidth="160"/>
-          <ColumnDefinition Width="6"/>
-          <ColumnDefinition Width="*" MinWidth="300"/>
-          <ColumnDefinition Width="6"/>
-          <ColumnDefinition Width="240" MinWidth="180"/>
-        </Grid.ColumnDefinitions>
+      <Grid Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" MinHeight="120"/>
+          <RowDefinition Height="6"/>
+          <RowDefinition Height="140" MinHeight="72"/>
+        </Grid.RowDefinitions>
 
-        <DockPanel Grid.Column="0" Background="{StaticResource PanelBrush}">
-          <TextBlock DockPanel.Dock="Top" Text="ПРОЕКТ" FontWeight="SemiBold" Margin="8,8,8,4"
-                     Foreground="{StaticResource FgBrush}"/>
-          <TreeView x:Name="ProjectTree"
-                    MouseDoubleClick="ProjectTree_MouseDoubleClick"/>
-        </DockPanel>
-
-        <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
-
-        <DockPanel Grid.Column="2" Background="{StaticResource BgBrush}">
-          <TextBlock x:Name="EditorPathText" DockPanel.Dock="Top"
-                     Text="(файл не выбран)" Margin="8,6" Foreground="{StaticResource FgInfoBrush}"/>
+        <DockPanel Grid.Row="0" Background="{StaticResource BgBrush}">
+          <Border DockPanel.Dock="Top"
+                  MinHeight="32"
+                  Background="{StaticResource PanelBrush}"
+                  BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="0,0,0,1">
+            <Grid>
+              <TextBlock x:Name="EmptyTabsText"
+                         Text="нет открытых файлов"
+                         Margin="10,0"
+                         VerticalAlignment="Center"
+                         Foreground="{StaticResource FgMutedBrush}"/>
+              <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                            VerticalScrollBarVisibility="Disabled"
+                            VerticalAlignment="Stretch">
+                <StackPanel x:Name="FileTabStrip" Orientation="Horizontal"/>
+              </ScrollViewer>
+            </Grid>
+          </Border>
           <avalonEdit:TextEditor x:Name="SqlEditor"
                                  FontFamily="Consolas"
                                  FontSize="13"
@@ -92,9 +97,52 @@
                                  LineNumbersForeground="#858585"/>
         </DockPanel>
 
-        <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
+        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                      ResizeDirection="Rows" Background="{StaticResource BorderBrush}"/>
 
-        <DockPanel Grid.Column="4" Background="{StaticResource PanelBrush}">
+        <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
+          <TextBlock DockPanel.Dock="Top" Text="Лог" FontWeight="SemiBold" Margin="8,6,8,2"
+                     Foreground="{StaticResource FgBrush}"/>
+          <TextBox x:Name="LogBox"
+                   IsReadOnly="True"
+                   IsReadOnlyCaretVisible="True"
+                   AcceptsReturn="True"
+                   TextWrapping="NoWrap"
+                   BorderThickness="0"
+                   Background="{StaticResource BgBrush}"
+                   Foreground="{StaticResource FgBrush}"
+                   CaretBrush="{StaticResource FgBrush}"
+                   FontFamily="Consolas"
+                   FontSize="12"
+                   VerticalScrollBarVisibility="Auto"
+                   HorizontalScrollBarVisibility="Auto"/>
+        </DockPanel>
+      </Grid>
+
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                    ResizeDirection="Columns" Background="{StaticResource BorderBrush}"/>
+
+      <Grid Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" MinHeight="120"/>
+          <RowDefinition Height="6"/>
+          <RowDefinition Height="240" MinHeight="140"/>
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Background="{StaticResource PanelBrush}">
+          <TextBlock DockPanel.Dock="Top" Text="ПРОЕКТ" FontWeight="SemiBold" Margin="8,8,8,4"
+                     Foreground="{StaticResource FgBrush}"/>
+          <TreeView x:Name="ProjectTree"
+                    Padding="2,2,0,4"
+                    MouseDoubleClick="ProjectTree_MouseDoubleClick"
+                    PreviewMouseRightButtonDown="ProjectTree_PreviewMouseRightButtonDown"
+                    PreviewKeyDown="ProjectTree_PreviewKeyDown"/>
+        </DockPanel>
+
+        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                      ResizeDirection="Rows" Background="{StaticResource BorderBrush}"/>
+
+        <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
           <TextBlock DockPanel.Dock="Top" Text="ВЕТКА / PR" FontWeight="SemiBold" Margin="8,8,8,4"
                      Foreground="{StaticResource FgBrush}"/>
           <StackPanel DockPanel.Dock="Top" Margin="8,0,8,8">
@@ -106,20 +154,25 @@
           </StackPanel>
           <TextBlock DockPanel.Dock="Top" Text="Изменения:" Margin="8,0,8,4"
                      Foreground="{StaticResource FgMutedBrush}"/>
-          <ListBox x:Name="ChangesList"/>
+          <Grid>
+            <TextBlock x:Name="NoChangesText"
+                       Text="нет изменений"
+                       Margin="8,4"
+                       Foreground="{StaticResource FgMutedBrush}"/>
+            <TreeView x:Name="ChangesTree"
+                      Padding="2,2,0,4"
+                      MouseDoubleClick="ChangesTree_MouseDoubleClick"
+                      PreviewMouseRightButtonDown="ChangesTree_PreviewMouseRightButtonDown"
+                      ContextMenuOpening="ChangesTree_ContextMenuOpening">
+              <TreeView.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="Отменить изменения" Click="RevertChange_Click"/>
+                </ContextMenu>
+              </TreeView.ContextMenu>
+            </TreeView>
+          </Grid>
         </DockPanel>
       </Grid>
-
-      <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
-
-      <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
-        <TextBlock DockPanel.Dock="Top" Text="Лог" FontWeight="SemiBold" Margin="8,6,8,2"
-                   Foreground="{StaticResource FgBrush}"/>
-        <ListBox x:Name="LogList"
-                 Background="{StaticResource BgBrush}"
-                 FontFamily="Consolas"
-                 FontSize="12"/>
-      </DockPanel>
     </Grid>
   </DockPanel>
 </Window>

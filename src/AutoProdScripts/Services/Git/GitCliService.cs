@@ -94,13 +94,85 @@ public sealed class GitCliService
     public async Task<GitResult> FetchAsync(string remote = "origin", CancellationToken ct = default)
         => await RunAsync(ct, "fetch", remote, "--prune").ConfigureAwait(false);
 
-    public async Task<GitResult> CreateBranchAsync(string branchName, string baseBranch, CancellationToken ct = default)
+    /// <summary>
+    /// Fetch, then fast-forward the checked-out branch so working files match the remote.
+    /// </summary>
+    public async Task<GitResult> SyncCurrentBranchAsync(string remote = "origin", CancellationToken ct = default)
     {
+        var fetch = await FetchAsync(remote, ct).ConfigureAwait(false);
+        if (!fetch.Success)
+            return fetch;
+
+        var branch = await GetCurrentBranchAsync(ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(branch) || branch.Equals("HEAD", StringComparison.OrdinalIgnoreCase))
+            return fetch;
+
+        var remoteBranch = $"{remote}/{branch}";
+        var exists = await RunAsync(ct, "rev-parse", "--verify", "--quiet", remoteBranch).ConfigureAwait(false);
+        if (!exists.Success)
+        {
+            return new GitResult(
+                true,
+                fetch.StdOut,
+                "У текущей ветки нет копии на remote. Рабочие файлы не менялись.",
+                0);
+        }
+
+        var merge = await RunAsync(ct, "merge", "--ff-only", remoteBranch).ConfigureAwait(false);
+        if (!merge.Success)
+            return merge;
+
+        return new GitResult(
+            true,
+            JoinOutput(fetch.StdOut, merge.StdOut),
+            JoinOutput(fetch.StdErr, merge.StdErr),
+            0);
+    }
+
+    public async Task<GitResult> CreateBranchAsync(
+        string branchName,
+        string baseBranch,
+        string remote = "origin",
+        CancellationToken ct = default)
+    {
+        var previous = await GetCurrentBranchAsync(ct).ConfigureAwait(false);
+
+        var fetch = await FetchAsync(remote, ct).ConfigureAwait(false);
+        if (!fetch.Success)
+            return fetch;
+
         var checkoutBase = await RunAsync(ct, "checkout", baseBranch).ConfigureAwait(false);
         if (!checkoutBase.Success)
             return checkoutBase;
 
+        var remoteBranch = $"{remote}/{baseBranch}";
+        var exists = await RunAsync(ct, "rev-parse", "--verify", "--quiet", remoteBranch).ConfigureAwait(false);
+        if (exists.Success)
+        {
+            var ff = await RunAsync(ct, "merge", "--ff-only", remoteBranch).ConfigureAwait(false);
+            if (!ff.Success)
+            {
+                if (!string.IsNullOrWhiteSpace(previous)
+                    && !previous.Equals("HEAD", StringComparison.OrdinalIgnoreCase)
+                    && !previous.Equals(baseBranch, StringComparison.OrdinalIgnoreCase))
+                {
+                    await RunAsync(ct, "checkout", previous).ConfigureAwait(false);
+                }
+
+                return ff;
+            }
+        }
+
         return await RunAsync(ct, "checkout", "-b", branchName).ConfigureAwait(false);
+    }
+
+    private static string JoinOutput(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left))
+            return right;
+        if (string.IsNullOrWhiteSpace(right))
+            return left;
+        return left + "\n" + right;
     }
 
     public async Task<GitResult> StatusPorcelainAsync(CancellationToken ct = default)
@@ -113,16 +185,71 @@ public sealed class GitCliService
         if (!result.Success)
             return entries;
 
-        foreach (var line in result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var raw in result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
+            var line = raw.TrimEnd('\r');
             if (line.Length < 4)
                 continue;
-            var status = line[..2].Trim();
-            var path = line[3..].Trim().Trim('"');
-            entries.Add(new GitStatusEntry(status, path));
+
+            var status = line[..2];
+            var rest = line[3..];
+            if (TrySplitRename(rest, out var oldPath, out var newPath))
+                entries.Add(new GitStatusEntry(status, NormalizePath(newPath), NormalizePath(oldPath)));
+            else
+                entries.Add(new GitStatusEntry(status, NormalizePath(Unquote(rest))));
         }
 
         return entries;
+    }
+
+    public async Task<GitResult> RestoreToHeadAsync(IReadOnlyList<string> paths, CancellationToken ct = default)
+    {
+        if (paths.Count == 0)
+            return new GitResult(true, string.Empty, string.Empty, 0);
+
+        var args = new List<string> { "restore", "--source=HEAD", "--staged", "--worktree", "--" };
+        args.AddRange(paths);
+        return await RunAsync(ct, args.ToArray()).ConfigureAwait(false);
+    }
+
+    public async Task<GitResult> UnstageAsync(IReadOnlyList<string> paths, CancellationToken ct = default)
+    {
+        if (paths.Count == 0)
+            return new GitResult(true, string.Empty, string.Empty, 0);
+
+        var args = new List<string> { "reset", "-q", "HEAD", "--" };
+        args.AddRange(paths);
+        return await RunAsync(ct, args.ToArray()).ConfigureAwait(false);
+    }
+
+    private static string NormalizePath(string path) => path.Replace('\\', '/');
+
+    private static string Unquote(string value)
+    {
+        value = value.Trim();
+        if (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
+            value = value[1..^1];
+        return value.Replace("\\\"", "\"", StringComparison.Ordinal).Replace("\\\\", "\\", StringComparison.Ordinal);
+    }
+
+    private static bool TrySplitRename(string rest, out string oldPath, out string newPath)
+    {
+        oldPath = string.Empty;
+        newPath = string.Empty;
+        var inQuotes = false;
+        for (var i = 0; i < rest.Length - 3; i++)
+        {
+            if (rest[i] == '"')
+                inQuotes = !inQuotes;
+            if (inQuotes || !rest.AsSpan(i).StartsWith(" -> "))
+                continue;
+
+            oldPath = Unquote(rest[..i]);
+            newPath = Unquote(rest[(i + 4)..]);
+            return true;
+        }
+
+        return false;
     }
 
     public async Task<GitResult> AddAsync(IEnumerable<string> paths, CancellationToken ct = default)

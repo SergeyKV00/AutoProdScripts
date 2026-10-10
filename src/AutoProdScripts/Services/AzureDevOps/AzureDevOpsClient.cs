@@ -53,6 +53,52 @@ public sealed class AzureDevOpsClient : IDisposable
         }
     }
 
+    public async Task<(bool Checked, PullRequestResult? Active)> FindActivePullRequestAsync(
+        string sourceBranch,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var source = Uri.EscapeDataString(ToRefsHeads(sourceBranch));
+            var apiUrl =
+                $"{_orgUrl}/{Uri.EscapeDataString(_project)}/_apis/git/repositories/{Uri.EscapeDataString(_repo)}/pullrequests?searchCriteria.sourceRefName={source}&searchCriteria.status=active&api-version=7.1";
+
+            using var response = await _http.GetAsync(apiUrl, ct).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return (false, null);
+
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Array || value.GetArrayLength() == 0)
+                return (true, null);
+
+            var first = value[0];
+            var id = first.TryGetProperty("pullRequestId", out var idProp) && idProp.TryGetInt32(out var parsedId)
+                ? parsedId
+                : (int?)null;
+            var title = first.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null;
+            var target = first.TryGetProperty("targetRefName", out var targetProp) ? targetProp.GetString() : null;
+            var targetShort = string.IsNullOrWhiteSpace(target)
+                ? null
+                : target.Replace("refs/heads/", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+            var message = id.HasValue
+                ? $"Для ветки «{sourceBranch.Trim()}» уже есть активный PR #{id.Value}"
+                : $"Для ветки «{sourceBranch.Trim()}» уже есть активный Pull Request";
+            if (!string.IsNullOrWhiteSpace(targetShort))
+                message += $" в «{targetShort}»";
+            message += ".";
+            if (!string.IsNullOrWhiteSpace(title))
+                message += $" {title}";
+
+            return (true, new PullRequestResult(true, id, BuildPrWebUrl(id), message));
+        }
+        catch (Exception ex)
+        {
+            return (false, new PullRequestResult(false, null, null, ex.Message));
+        }
+    }
+
     public async Task<PullRequestResult> CreatePullRequestAsync(
         string sourceBranch,
         string targetBranch,
