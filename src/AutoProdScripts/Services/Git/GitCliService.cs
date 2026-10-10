@@ -85,6 +85,56 @@ public sealed class GitCliService
             .ToList();
     }
 
+    public async Task<IReadOnlyList<GitBranchRef>> ListBranchRefsAsync(CancellationToken ct = default)
+    {
+        var result = await RunAsync(ct, "branch", "-a", "--no-color").ConfigureAwait(false);
+        var list = new List<GitBranchRef>();
+        if (!result.Success)
+            return list;
+
+        foreach (var raw in result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var line = raw.Trim();
+            var isCurrent = line.StartsWith('*');
+            if (isCurrent)
+                line = line[1..].Trim();
+            if (line.Contains("->", StringComparison.Ordinal))
+                continue;
+
+            if (line.StartsWith("remotes/", StringComparison.Ordinal))
+            {
+                var rest = line["remotes/".Length..];
+                var slash = rest.IndexOf('/');
+                if (slash <= 0)
+                    continue;
+                var remote = rest[..slash];
+                var name = rest[(slash + 1)..];
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+                list.Add(new GitBranchRef(name, remote, false));
+                continue;
+            }
+
+            list.Add(new GitBranchRef(line, null, isCurrent));
+        }
+
+        return list;
+    }
+
+    public async Task<GitResult> CheckoutBranchAsync(string branch, string remote = "origin", CancellationToken ct = default)
+    {
+        var local = await RunAsync(ct, "show-ref", "--verify", "--quiet", "refs/heads/" + branch).ConfigureAwait(false);
+        if (local.Success)
+            return await RunAsync(ct, "checkout", branch).ConfigureAwait(false);
+
+        var remoteRef = $"{remote}/{branch}";
+        var remoteExists = await RunAsync(ct, "rev-parse", "--verify", "--quiet", remoteRef).ConfigureAwait(false);
+        if (!remoteExists.Success)
+            return new GitResult(false, string.Empty, $"Ветка «{branch}» не найдена.", 1);
+
+        return await RunAsync(ct, "checkout", "-b", branch, "--track", remoteRef).ConfigureAwait(false);
+    }
+
     public async Task<string?> GetCurrentBranchAsync(CancellationToken ct = default)
     {
         var result = await RunAsync(ct, "rev-parse", "--abbrev-ref", "HEAD").ConfigureAwait(false);
@@ -93,6 +143,12 @@ public sealed class GitCliService
 
     public async Task<GitResult> FetchAsync(string remote = "origin", CancellationToken ct = default)
         => await RunAsync(ct, "fetch", remote, "--prune").ConfigureAwait(false);
+
+    public async Task<GitResult> StashPushAsync(CancellationToken ct = default)
+        => await RunAsync(ct, "stash", "push", "-u", "-m", "autopr").ConfigureAwait(false);
+
+    public async Task<GitResult> StashPopAsync(CancellationToken ct = default)
+        => await RunAsync(ct, "stash", "pop").ConfigureAwait(false);
 
     /// <summary>
     /// Fetch, then fast-forward the checked-out branch so working files match the remote.

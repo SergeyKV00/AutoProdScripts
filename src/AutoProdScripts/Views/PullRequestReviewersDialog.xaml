@@ -1,0 +1,83 @@
+<Window x:Class="AutoProdScripts.Views.PullRequestReviewersDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ревьюверы"
+        Height="640" Width="720"
+        MinHeight="420" MinWidth="560"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgBrush}"
+        Foreground="{StaticResource FgBrush}"
+        ResizeMode="CanResizeWithGrip">
+  <Window.Resources>
+    <DataTemplate x:Key="ReviewerItemTemplate">
+      <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="32"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="150"/>
+          </Grid.ColumnDefinitions>
+          <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    VerticalAlignment="Center"/>
+          <StackPanel Grid.Column="1">
+            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding DisplayName}" Foreground="{StaticResource FgBrush}"/>
+            <TextBlock Text="{Binding SecondaryText}" Foreground="{StaticResource FgMutedBrush}" FontSize="11"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding SecondaryText}"/>
+          </StackPanel>
+          <CheckBox Grid.Column="2" Content="Обязательный" VerticalAlignment="Center"
+                    Foreground="{StaticResource FgBrush}"
+                    IsChecked="{Binding IsRequired, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </Window.Resources>
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+      <TextBlock x:Name="SummaryText" TextWrapping="Wrap" Foreground="{StaticResource FgInfoBrush}"/>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+        <Button Content="Отмена" IsCancel="True" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Width="100"/>
+        <Button x:Name="ContinueButton" Content="Продолжить" IsDefault="True" Click="Continue_Click"
+                IsEnabled="False" Width="140" Margin="8,0,0,0"/>
+      </StackPanel>
+    </StackPanel>
+
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Top">
+        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgBrush}"
+                   Text="Отметьте, кого добавить в pull request. «Обязательный» — без его одобрения PR нельзя завершить. Остальные выбранные — опциональные. Выбор сохранится и будет отмечен при следующем PR."/>
+        <Label Content="Поиск" Margin="0,12,0,0"/>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Снять все" Click="Clear_Click" Style="{StaticResource SecondaryButton}" Width="110" Margin="8,0,0,0"/>
+          <TextBox x:Name="SearchBox" TextChanged="SearchBox_TextChanged"/>
+        </DockPanel>
+        <TextBlock x:Name="LoadStatusText" Text="Загрузка участников команд проекта…" TextWrapping="Wrap"
+                   Foreground="{StaticResource FgInfoBrush}" Margin="0,8,0,8"/>
+      </StackPanel>
+
+      <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="{StaticResource PanelBrush}">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" Margin="12,8,12,4">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="32"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="150"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="В PR" Foreground="{StaticResource FgMutedBrush}" FontSize="11"/>
+            <TextBlock Grid.Column="1" Text="Сотрудник" Foreground="{StaticResource FgMutedBrush}" FontSize="11"/>
+            <TextBlock Grid.Column="2" Text="Обязательный" Foreground="{StaticResource FgMutedBrush}" FontSize="11"/>
+          </Grid>
+          <Grid>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <ItemsControl x:Name="ReviewersList" Margin="4,0,4,8"
+                            ItemTemplate="{StaticResource ReviewerItemTemplate}"/>
+            </ScrollViewer>
+            <TextBlock x:Name="EmptyText" Text="Список пуст. Можно продолжить без ревьюверов."
+                       Foreground="{StaticResource FgMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="Collapsed" Margin="16"/>
+          </Grid>
+        </DockPanel>
+      </Border>
+    </DockPanel>
+  </DockPanel>
+</Window>

@@ -21,6 +21,8 @@ public partial class MainWindow : Window
     private readonly ProjectDiscoveryService _discovery = new();
     private readonly List<OpenDocument> _documents = new();
     private GitCliService? _git;
+    private bool _branchUiLock;
+    private List<GitBranchRef> _branchRefs = new();
     private OpenDocument? _activeDocument;
     private string? _currentFilePath;
     private bool _dirty;
@@ -77,9 +79,9 @@ public partial class MainWindow : Window
         await InitializeWorkspaceAsync();
     }
 
-    private bool ShowSettingsDialog()
+    private bool ShowSettingsDialog(bool openMicrosoftLogin = false, bool openAutoPrTab = false)
     {
-        var dlg = new SettingsWindow { Owner = this };
+        var dlg = new SettingsWindow(openMicrosoftLogin, openAutoPrTab) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultSettings is null)
             return false;
 
@@ -115,6 +117,7 @@ public partial class MainWindow : Window
         RefreshTree();
         await RefreshBranchUiAsync();
         await RefreshChangesAsync();
+        RefreshAuthStatus();
         SetStatus("готов");
     }
 
@@ -212,8 +215,166 @@ public partial class MainWindow : Window
 
         _currentBranch = await _git.GetCurrentBranchAsync();
         BranchStatusText.Text = $"ветка: {_currentBranch ?? "—"}";
-        SideBranchText.Text = $"Ветка: {_currentBranch ?? "—"}";
         SideBaseText.Text = $"база (последняя): {App.Settings.Current.LastBaseBranch}";
+        await FillBranchBoxAsync();
+    }
+
+    private async Task FillBranchBoxAsync()
+    {
+        if (_git is null)
+            return;
+
+        _branchRefs = (await _git.ListBranchRefsAsync()).ToList();
+        BranchButtonText.Text = string.IsNullOrWhiteSpace(_currentBranch) ? "—" : _currentBranch;
+        if (BranchPopup.IsOpen)
+            RebuildBranchTree();
+    }
+
+    private void SwitchBranch_Click(object sender, RoutedEventArgs e)
+    {
+        if (_git is null)
+            return;
+
+        BranchPopup.IsOpen = true;
+    }
+
+    private void BranchPopup_Opened(object sender, EventArgs e)
+    {
+        _branchUiLock = true;
+        BranchSearchBox.Text = string.Empty;
+        _branchUiLock = false;
+        RebuildBranchTree();
+        BranchSearchBox.Focus();
+    }
+
+    private void BranchSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_branchUiLock)
+            return;
+        RebuildBranchTree();
+    }
+
+    private void RebuildBranchTree()
+    {
+        var query = (BranchSearchBox.Text ?? string.Empty).Trim();
+        var matches = _branchRefs.Where(branch =>
+            string.IsNullOrEmpty(query) ||
+            branch.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        var local = matches
+            .Where(branch => branch.Remote is null)
+            .OrderByDescending(branch => branch.IsCurrent)
+            .ThenBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var remotes = matches
+            .Where(branch => branch.Remote is not null)
+            .GroupBy(branch => branch.Remote!, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase);
+
+        _branchUiLock = true;
+        try
+        {
+            BranchTree.Items.Clear();
+            AddBranchFolder("Стянутые", local, expand: !string.IsNullOrEmpty(query) || local.Any(branch => branch.IsCurrent));
+            foreach (var group in remotes)
+            {
+                AddBranchFolder(
+                    "remote/" + group.Key,
+                    group.OrderBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+                    expand: !string.IsNullOrEmpty(query));
+            }
+
+            var any = BranchTree.Items.Count > 0;
+            BranchEmptyText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+            BranchTree.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        }
+        finally
+        {
+            _branchUiLock = false;
+        }
+    }
+
+    private void AddBranchFolder(string title, IReadOnlyList<GitBranchRef> branches, bool expand)
+    {
+        if (branches.Count == 0)
+            return;
+
+        var folder = new TreeViewItem
+        {
+            IsExpanded = expand,
+            Header = new TextBlock
+            {
+                Text = title,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("FgInfoBrush")
+            }
+        };
+        foreach (var branch in branches)
+        {
+            folder.Items.Add(new TreeViewItem
+            {
+                Header = new TextBlock
+                {
+                    Text = branch.IsCurrent ? branch.Name + "  · текущая" : branch.Name,
+                    Foreground = (Brush)FindResource(branch.IsCurrent ? "FgInfoBrush" : "FgBrush")
+                },
+                Tag = branch
+            });
+        }
+
+        BranchTree.Items.Add(folder);
+    }
+
+    private async void BranchTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (_branchUiLock || BranchTree.SelectedItem is not TreeViewItem item || item.Tag is not GitBranchRef branch)
+            return;
+
+        BranchPopup.IsOpen = false;
+        if (branch.Name.Equals(_currentBranch, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        await SwitchToBranchAsync(branch);
+    }
+
+    private async Task SwitchToBranchAsync(GitBranchRef branch)
+    {
+        if (_git is null)
+            return;
+
+        if (_documents.Any(d => d.IsDirty) && !SaveAllDirtyDocuments())
+        {
+            await RefreshBranchUiAsync();
+            return;
+        }
+
+        BranchButton.IsEnabled = false;
+        try
+        {
+            SetStatus("переключение ветки…");
+            var remote = branch.Remote ?? App.Settings.Current.RemoteName;
+            var result = await _git.CheckoutBranchAsync(branch.Name, remote);
+            if (!result.Success)
+            {
+                App.Log.Error($"checkout failed: {result.CombinedOutput}");
+                SetStatus("ошибка ветки");
+                MessageBox.Show(this, result.CombinedOutput, "Переключить ветку",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                await RefreshBranchUiAsync();
+                return;
+            }
+
+            App.Log.Info($"ветка: {branch.Name}");
+            SetStatus("ветка переключена");
+            RefreshTree();
+            ReloadOpenDocumentsFromDisk();
+            await RefreshBranchUiAsync();
+            await RefreshChangesAsync();
+        }
+        finally
+        {
+            BranchButton.IsEnabled = true;
+        }
     }
 
     private async Task RefreshChangesAsync()
@@ -1164,20 +1325,312 @@ public partial class MainWindow : Window
             base.OnClosing(e);
     }
 
+    private async void AutoPr_Click(object sender, RoutedEventArgs e)
+    {
+        if (_git is null)
+            return;
+
+        AutoPrButton.IsEnabled = false;
+        try
+        {
+            var settings = App.Settings.Current;
+            if (!AutoPrTemplate.IsReady(settings))
+            {
+                if (!ShowSettingsDialog(openAutoPrTab: true))
+                    return;
+
+                await InitializeWorkspaceAsync();
+                settings = App.Settings.Current;
+                if (!AutoPrTemplate.IsReady(settings))
+                {
+                    SetStatus("шаблон Auto PR не настроен");
+                    return;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.AzureDevOpsProject) ||
+                string.IsNullOrWhiteSpace(settings.AzureDevOpsRepo))
+            {
+                MessageBox.Show(this, "Укажите Project и Repo в Настройках.", "Auto Pull Request",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (_documents.Any(d => d.IsDirty) && !SaveAllDirtyDocuments())
+                return;
+
+            var changes = await _git.GetStatusEntriesAsync();
+            var currentBranch = await _git.GetCurrentBranchAsync();
+            if (string.IsNullOrWhiteSpace(currentBranch))
+            {
+                MessageBox.Show(this, "Не удалось определить текущую ветку.", "Auto Pull Request",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            SetStatus("авторизация…");
+            var (session, authError) = await AzureDevOpsSession.OpenAsync(settings);
+            if (session is null)
+            {
+                SetStatus("ошибка авторизации");
+                MessageBox.Show(this, authError ?? "Не удалось авторизоваться в Azure DevOps.", "Auto Pull Request",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            using var client = session.CreateClient(
+                settings.AzureDevOpsOrgUrl,
+                settings.AzureDevOpsProject,
+                settings.AzureDevOpsRepo);
+            SetStatus("проверка PR…");
+            var (prChecked, activePr) = await client.FindActivePullRequestAsync(currentBranch);
+            if (prChecked && activePr is not null && !string.IsNullOrWhiteSpace(activePr.Url))
+            {
+                if (changes.Count > 0)
+                {
+                    var pushAnswer = MessageBox.Show(
+                        this,
+                        $"Есть изменения ({changes.Count}). Запушить их в текущую ветку?",
+                        "Auto Pull Request",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+                    if (pushAnswer != MessageBoxResult.Yes)
+                        return;
+
+                    var pushedTitle = AutoPrTemplate.SuggestTitle(changes.Select(c => c.Path));
+                    if (!await CommitAndPushAsync(settings, currentBranch, $"{currentBranch}: {pushedTitle}"))
+                        return;
+                    await RefreshChangesAsync();
+                }
+
+                App.Log.Info(activePr.Message + " " + activePr.Url);
+                SetStatus("активный PR");
+                var text = string.IsNullOrWhiteSpace(activePr.Title) ? "скрипты" : activePr.Title;
+                var id = activePr.PullRequestId is null ? string.Empty : $" #{activePr.PullRequestId}";
+                ShowTelegramResult("Активный PR создан" + id, activePr.Message, activePr, text, settings);
+                return;
+            }
+
+            if (!prChecked)
+                App.Log.Warn("не удалось проверить активные PR");
+
+            var choice = new AutoPrBranchChoiceDialog(currentBranch, changes.Count) { Owner = this };
+            if (choice.ShowDialog() != true)
+                return;
+
+            if (choice.Choice == AutoPrBranchChoice.Current)
+            {
+                if (currentBranch.Equals(settings.AutoBaseBranch, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(this,
+                        "Текущая ветка совпадает с базовой. Создайте PR из новой ветки.",
+                        "Auto Pull Request",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+
+                var title = changes.Count > 0
+                    ? AutoPrTemplate.SuggestTitle(changes.Select(c => c.Path))
+                    : currentBranch;
+                var commitMessage = changes.Count > 0 ? $"{currentBranch}: {title}" : null;
+                if (!await CommitAndPushAsync(settings, currentBranch, commitMessage))
+                    return;
+
+                var prTitle = changes.Count > 0 ? $"{currentBranch}: {title}" : currentBranch;
+                await PublishAutoPullRequestAsync(
+                    client, settings, currentBranch, settings.AutoBaseBranch, prTitle, title);
+                return;
+            }
+
+            await CreateAutoPrOnNewBranchAsync(client, settings, changes);
+        }
+        finally
+        {
+            AutoPrButton.IsEnabled = true;
+        }
+    }
+
+    private async Task CreateAutoPrOnNewBranchAsync(
+        AzureDevOpsClient client,
+        AppSettings settings,
+        IReadOnlyList<GitStatusEntry> changes)
+    {
+        var title = changes.Count > 0
+            ? AutoPrTemplate.SuggestTitle(changes.Select(c => c.Path))
+            : "скрипты";
+        var branch = AutoPrTemplate.ExpandBranchName(
+            settings.AutoBranchNameTemplate,
+            settings.AutoBaseBranch,
+            DateTime.Now);
+        if (string.IsNullOrWhiteSpace(branch)
+            || branch.Equals(settings.AutoBaseBranch, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(this, "Шаблон имени ветки дал пустое или совпадающее с базой имя.", "Auto Pull Request",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SetStatus("сохранение изменений…");
+        var stash = await _git!.StashPushAsync();
+        if (!stash.Success)
+        {
+            ShowPrError($"git stash: {stash.CombinedOutput}");
+            return;
+        }
+
+        var hadStash = !stash.CombinedOutput.Contains("No local changes", StringComparison.OrdinalIgnoreCase);
+        SetStatus("создание ветки…");
+        var created = await _git.CreateBranchAsync(branch, settings.AutoBaseBranch, settings.RemoteName);
+        RefreshTree();
+        await RefreshBranchUiAsync();
+        if (!created.Success)
+        {
+            if (hadStash)
+                await _git.StashPopAsync();
+            RefreshTree();
+            await RefreshChangesAsync();
+            ShowPrError($"ветка: {created.CombinedOutput}");
+            return;
+        }
+
+        if (hadStash)
+        {
+            var pop = await _git.StashPopAsync();
+            if (!pop.Success)
+            {
+                RefreshTree();
+                await RefreshChangesAsync();
+                ShowPrError($"Ветка создана, но изменения не применились: {pop.CombinedOutput}");
+                return;
+            }
+        }
+
+        var commitMessage = changes.Count > 0 ? $"{branch}: {title}" : null;
+        if (!await CommitAndPushAsync(settings, branch, commitMessage))
+            return;
+
+        var prTitle = changes.Count > 0 ? $"{branch}: {title}" : branch;
+        await PublishAutoPullRequestAsync(client, settings, branch, settings.AutoBaseBranch, prTitle, title);
+    }
+
+    private async Task<bool> CommitAndPushAsync(AppSettings settings, string branch, string? commitMessage)
+    {
+        if (!string.IsNullOrWhiteSpace(commitMessage))
+        {
+            SetStatus("commit…");
+            var add = await _git!.AddAsync(new[] { "." });
+            if (!add.Success)
+            {
+                ShowPrError($"git add: {add.CombinedOutput}");
+                return false;
+            }
+
+            var commit = await _git.CommitAsync(commitMessage);
+            if (!commit.Success)
+            {
+                ShowPrError($"git commit: {commit.CombinedOutput}");
+                return false;
+            }
+
+            App.Log.Info($"commit ok: {commitMessage}");
+        }
+
+        SetStatus("push…");
+        var push = await _git!.PushAsync(settings.RemoteName, branch, setUpstream: true);
+        if (!push.Success)
+        {
+            App.Log.Error($"push failed: {push.CombinedOutput}");
+            ShowPrError($"git push: {push.CombinedOutput}");
+            return false;
+        }
+
+        App.Log.Info("push ok");
+        return true;
+    }
+
+    private async Task PublishAutoPullRequestAsync(
+        AzureDevOpsClient client,
+        AppSettings settings,
+        string sourceBranch,
+        string targetBranch,
+        string prTitle,
+        string text)
+    {
+        SetStatus("создание PR…");
+        var reviewers = (settings.AutoReviewers ?? new List<SavedReviewer>())
+            .Where(r => !string.IsNullOrWhiteSpace(r.Id))
+            .Select(r => r.Copy())
+            .ToList();
+        var (prChecked, activePr) = await client.FindActivePullRequestAsync(sourceBranch);
+        PullRequestResult pr;
+        var existed = false;
+        if (prChecked && activePr is not null && !string.IsNullOrWhiteSpace(activePr.Url))
+        {
+            pr = activePr;
+            existed = true;
+            App.Log.Info(activePr.Message + " " + activePr.Url);
+            SetStatus("PR уже активен");
+        }
+        else
+        {
+            if (!prChecked)
+                App.Log.Warn("не удалось проверить активные PR, создаём новый");
+
+            App.Log.Info(FormatReviewers(reviewers));
+            pr = await client.CreatePullRequestAsync(sourceBranch, targetBranch, prTitle, prTitle, reviewers);
+            if (!pr.Success)
+            {
+                App.Log.Error(pr.Message);
+                SetStatus("ошибка PR");
+                new PullRequestResultDialog("Не удалось создать Pull Request", pr.Message, null, success: false)
+                { Owner = this }.ShowDialog();
+                return;
+            }
+
+            App.Log.Info(pr.Message + (pr.Url is null ? string.Empty : $" {pr.Url}"));
+            SetStatus("PR создан");
+        }
+
+        await RefreshChangesAsync();
+        var id = pr.PullRequestId is null ? string.Empty : $" #{pr.PullRequestId}";
+        var heading = existed ? "Активный PR создан" + id : "Pull Request" + id;
+        ShowTelegramResult(
+            heading,
+            $"Status: Active\n{pr.Message}\n{FormatReviewers(reviewers)}",
+            pr,
+            string.IsNullOrWhiteSpace(pr.Title) ? text : pr.Title,
+            settings);
+    }
+
+    private void ShowTelegramResult(string heading, string status, PullRequestResult pr, string text, AppSettings settings)
+    {
+        var caption = string.IsNullOrWhiteSpace(text) ? "PR" : text;
+        var template = TelegramMessage.ExpandCustom(
+            settings.TelegramMessageTemplate,
+            settings.TelegramCustomTemplates);
+        new PullRequestResultDialog(
+            heading,
+            status,
+            pr.Url,
+            success: true,
+            telegram: new TelegramCompose
+            {
+                Template = template,
+                Text = text,
+                LinkCaption = caption,
+                LinkUrl = pr.Url ?? string.Empty,
+                Tags = settings.TelegramTags ?? string.Empty
+            })
+        { Owner = this }.ShowDialog();
+    }
+
     private async void CreatePr_Click(object sender, RoutedEventArgs e)
     {
         if (_git is null)
             return;
 
         var settings = App.Settings.Current;
-        var pat = App.Settings.LoadPat();
-        if (string.IsNullOrWhiteSpace(pat))
-        {
-            MessageBox.Show(this, "PAT не задан. Откройте Настройки.", "Create PR",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
         if (string.IsNullOrWhiteSpace(settings.AzureDevOpsProject) ||
             string.IsNullOrWhiteSpace(settings.AzureDevOpsRepo))
         {
@@ -1203,6 +1656,24 @@ public partial class MainWindow : Window
                 "Create PR", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (confirm != MessageBoxResult.Yes)
                 return;
+        }
+
+        SetStatus("авторизация…");
+        var (session, authError) = await AzureDevOpsSession.OpenAsync(settings);
+        if (session is null)
+        {
+            SetStatus("ошибка авторизации");
+            MessageBox.Show(this, authError ?? "Не удалось авторизоваться в Azure DevOps.", "Create PR",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        SetStatus("ревьюверы…");
+        var reviewers = ChooseReviewers(settings, session);
+        if (reviewers is null)
+        {
+            SetStatus("создание PR отменено");
+            return;
         }
 
         var changes = await _git.GetStatusEntriesAsync();
@@ -1252,11 +1723,10 @@ public partial class MainWindow : Window
         App.Log.Info("push ok");
         SetStatus("проверка PR…");
 
-        using var client = new AzureDevOpsClient(
+        using var client = session.CreateClient(
             settings.AzureDevOpsOrgUrl,
             settings.AzureDevOpsProject,
-            settings.AzureDevOpsRepo,
-            pat);
+            settings.AzureDevOpsRepo);
 
         var (prChecked, activePr) = await client.FindActivePullRequestAsync(branch);
         if (prChecked && activePr is not null)
@@ -1287,14 +1757,16 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(_currentFilePath))
             title = $"{branch}: {Path.GetFileName(_currentFilePath)}";
 
-        var pr = await client.CreatePullRequestAsync(branch, baseBranch, title, title);
+        var reviewerLine = FormatReviewers(reviewers);
+        App.Log.Info(reviewerLine);
+        var pr = await client.CreatePullRequestAsync(branch, baseBranch, title, title, reviewers);
         if (!pr.Success)
         {
             App.Log.Error(pr.Message);
             SetStatus("ошибка PR");
             var failDlg = new PullRequestResultDialog(
                 "Не удалось создать Pull Request",
-                pr.Message,
+                pr.Message + Environment.NewLine + reviewerLine,
                 null,
                 success: false)
             { Owner = this };
@@ -1308,11 +1780,45 @@ public partial class MainWindow : Window
 
         var okDlg = new PullRequestResultDialog(
             $"Pull Request создан{(pr.PullRequestId is null ? string.Empty : $" #{pr.PullRequestId}")}",
-            $"Status: Active\n{pr.Message}",
+            $"Status: Active\n{pr.Message}\n{reviewerLine}",
             pr.Url,
             success: true)
         { Owner = this };
         okDlg.ShowDialog();
+    }
+
+    private IReadOnlyList<SavedReviewer>? ChooseReviewers(AppSettings settings, AzureDevOpsSession session)
+    {
+        var dialog = new PullRequestReviewersDialog(
+            settings.AzureDevOpsOrgUrl,
+            settings.AzureDevOpsProject,
+            settings.AzureDevOpsRepo,
+            session.Authorization,
+            settings.SavedReviewers)
+        { Owner = this };
+
+        if (dialog.ShowDialog() != true)
+            return null;
+
+        var selected = dialog.SelectedReviewers.Select(r => r.Copy()).ToList();
+        settings.SavedReviewers = selected.Select(r => r.Copy()).ToList();
+        App.Settings.Save(settings);
+        return selected;
+    }
+
+    private static string FormatReviewers(IReadOnlyList<SavedReviewer> reviewers)
+    {
+        if (reviewers.Count == 0)
+            return "Ревьюверы не назначены.";
+
+        var parts = reviewers.Select(r =>
+        {
+            var name = string.IsNullOrWhiteSpace(r.DisplayName) ? r.UniqueName : r.DisplayName;
+            if (string.IsNullOrWhiteSpace(name))
+                name = r.Id;
+            return r.IsRequired ? $"{name} (обязательный)" : name;
+        });
+        return "Ревьюверы: " + string.Join(", ", parts);
     }
 
     private void ShowPrError(string message)
@@ -1321,9 +1827,29 @@ public partial class MainWindow : Window
         MessageBox.Show(this, message, "Create PR", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
+    private void RefreshAuthStatus()
+    {
+        var settings = App.Settings.Current;
+        if (settings.AuthMode == AzureAuthMode.MicrosoftAccount)
+        {
+            var name = MicrosoftAccountAuthService.GetSignedInUsername();
+            AuthStatusText.Text = string.IsNullOrWhiteSpace(name) ? "вход: Microsoft" : $"вход: {name}";
+            return;
+        }
+
+        AuthStatusText.Text = App.Settings.HasPat() ? "вход: PAT" : "вход: PAT не задан";
+    }
+
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         if (!ShowSettingsDialog())
+            return;
+        _ = InitializeWorkspaceAsync();
+    }
+
+    private void SignIn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!ShowSettingsDialog(openMicrosoftLogin: true))
             return;
         _ = InitializeWorkspaceAsync();
     }

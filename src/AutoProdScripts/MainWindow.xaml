@@ -21,11 +21,14 @@
       <MenuItem Header="Git">
         <MenuItem Header="Sync" Click="Sync_Click"/>
         <MenuItem Header="Новая ветка…" Click="NewBranch_Click"/>
+        <MenuItem Header="Переключить ветку…" Click="SwitchBranch_Click"/>
         <MenuItem Header="Статус" Click="Status_Click"/>
       </MenuItem>
       <MenuItem Header="PR">
         <MenuItem Header="Create PR…" Click="CreatePr_Click"/>
+        <MenuItem Header="Auto Pull Request" Click="AutoPr_Click"/>
       </MenuItem>
+      <MenuItem Header="Войти…" Click="SignIn_Click"/>
       <MenuItem Header="Настройки" Click="Settings_Click"/>
     </Menu>
 
@@ -37,6 +40,8 @@
         <Separator/>
         <Button Content="💾 Сохранить" Click="Save_Click"/>
         <Button Content="↗ Create PR" Click="CreatePr_Click"/>
+        <Separator/>
+        <Button Content="Войти" Click="SignIn_Click" ToolTip="Вход в Azure DevOps через учётную запись Microsoft"/>
       </ToolBar>
     </ToolBarTray>
 
@@ -47,6 +52,10 @@
       <Separator/>
       <StatusBarItem>
         <TextBlock x:Name="BranchStatusText" Text="ветка: —" Foreground="White"/>
+      </StatusBarItem>
+      <Separator/>
+      <StatusBarItem>
+        <TextBlock x:Name="AuthStatusText" Text="вход: —" Foreground="White"/>
       </StatusBarItem>
       <Separator/>
       <StatusBarItem>
@@ -125,6 +134,7 @@
       <Grid Grid.Column="2">
         <Grid.RowDefinitions>
           <RowDefinition Height="*" MinHeight="120"/>
+          <RowDefinition Height="Auto"/>
           <RowDefinition Height="6"/>
           <RowDefinition Height="240" MinHeight="140"/>
         </Grid.RowDefinitions>
@@ -139,15 +149,63 @@
                     PreviewKeyDown="ProjectTree_PreviewKeyDown"/>
         </DockPanel>
 
-        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+        <Border Grid.Row="1" Background="{StaticResource PanelBrush}" Padding="8,8,8,4"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+          <Button x:Name="AutoPrButton" Content="Auto Pull Request" Click="AutoPr_Click"
+                  HorizontalAlignment="Stretch"
+                  ToolTip="Создать ветку, закоммитить скрипты и открыть PR по шаблону"/>
+        </Border>
+
+        <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch"
                       ResizeDirection="Rows" Background="{StaticResource BorderBrush}"/>
 
-        <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
+        <DockPanel Grid.Row="3" Background="{StaticResource PanelBrush}">
           <TextBlock DockPanel.Dock="Top" Text="ВЕТКА / PR" FontWeight="SemiBold" Margin="8,8,8,4"
                      Foreground="{StaticResource FgBrush}"/>
           <StackPanel DockPanel.Dock="Top" Margin="8,0,8,8">
-            <TextBlock x:Name="SideBranchText" Text="Ветка: —" TextWrapping="Wrap"
-                       Foreground="{StaticResource FgBrush}"/>
+            <TextBlock Text="Ветка" Foreground="{StaticResource FgMutedBrush}"/>
+            <Grid Margin="0,4,0,0">
+              <ToggleButton x:Name="BranchButton"
+                            Style="{StaticResource BranchPickerButton}"
+                            IsChecked="{Binding IsOpen, ElementName=BranchPopup, Mode=TwoWay}"
+                            ToolTip="Переключить текущую ветку">
+                <DockPanel LastChildFill="True">
+                  <TextBlock DockPanel.Dock="Right" Text="▾" Margin="8,0,0,0"
+                             VerticalAlignment="Center" Foreground="{StaticResource FgMutedBrush}"/>
+                  <TextBlock x:Name="BranchButtonText" Text="—" TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" Foreground="{StaticResource FgBrush}"/>
+                </DockPanel>
+              </ToggleButton>
+              <Popup x:Name="BranchPopup"
+                     PlacementTarget="{Binding ElementName=BranchButton}"
+                     Placement="Bottom"
+                     StaysOpen="False"
+                     AllowsTransparency="True"
+                     PopupAnimation="Fade"
+                     Opened="BranchPopup_Opened">
+                <Border Background="{StaticResource PanelAltBrush}"
+                        BorderBrush="#555555"
+                        BorderThickness="1"
+                        Padding="8"
+                        MinWidth="{Binding ActualWidth, ElementName=BranchButton}">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Поиск" Margin="0,0,0,4"
+                               Foreground="{StaticResource FgMutedBrush}"/>
+                    <TextBox x:Name="BranchSearchBox" DockPanel.Dock="Top" Margin="0,0,0,8"
+                             TextChanged="BranchSearchBox_TextChanged"/>
+                    <TextBlock x:Name="BranchEmptyText" DockPanel.Dock="Top" Text="нет веток"
+                               Margin="0,4" Visibility="Collapsed"
+                               Foreground="{StaticResource FgMutedBrush}"/>
+                    <TreeView x:Name="BranchTree"
+                              MaxHeight="320"
+                              BorderThickness="0"
+                              Background="{StaticResource PanelAltBrush}"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              SelectedItemChanged="BranchTree_SelectedItemChanged"/>
+                  </DockPanel>
+                </Border>
+              </Popup>
+            </Grid>
             <TextBlock x:Name="SideBaseText" Text="от: —" Margin="0,4,0,0"
                        Foreground="{StaticResource FgMutedBrush}"/>
             <Button Content="Create PR" Click="CreatePr_Click" Margin="0,12,0,0" HorizontalAlignment="Stretch"/>

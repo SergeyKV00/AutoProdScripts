@@ -1,0 +1,19 @@
+<Window x:Class="AutoProdScripts.Views.AutoPrBranchChoiceDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Auto Pull Request"
+        Width="520"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource BgBrush}"
+        Foreground="{StaticResource FgBrush}">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button Content="Отмена" IsCancel="True" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Width="100"/>
+      <Button Content="Новая ветка" Click="New_Click" Style="{StaticResource SecondaryButton}" Width="130" Margin="8,0,0,0"/>
+      <Button Content="Из текущей ветки" IsDefault="True" Click="Current_Click" Width="160" Margin="8,0,0,0"/>
+    </StackPanel>
+    <TextBlock x:Name="MessageText" TextWrapping="Wrap" Foreground="{StaticResource FgBrush}"/>
+  </DockPanel>
+</Window>

@@ -8,6 +8,8 @@ public sealed record GitResult(bool Success, string StdOut, string StdErr, int E
 
 public sealed record GitBranchInfo(string Name, bool IsRemote, bool IsCurrent);
 
+public sealed record GitBranchRef(string Name, string? Remote, bool IsCurrent);
+
 public enum GitChangeKind
 {
     Added,
@@ -55,4 +57,5 @@ public sealed record PullRequestResult(
     bool Success,
     int? PullRequestId,
     string? Url,
-    string Message);
+    string Message,
+    string? Title = null);
