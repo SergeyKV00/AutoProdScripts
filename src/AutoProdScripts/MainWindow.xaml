@@ -8,7 +8,7 @@
         Background="{StaticResource BgBrush}"
         Foreground="{StaticResource FgBrush}">
   <DockPanel>
-    <Menu DockPanel.Dock="Top" Background="{StaticResource PanelBrush}" Foreground="{StaticResource FgBrush}">
+    <Menu DockPanel.Dock="Top">
       <MenuItem Header="Файл">
         <MenuItem Header="Сохранить" Click="Save_Click" InputGestureText="Ctrl+S"/>
         <MenuItem Header="Настройки…" Click="Settings_Click"/>
@@ -30,7 +30,7 @@
     </Menu>
 
     <ToolBarTray DockPanel.Dock="Top" Background="{StaticResource PanelBrush}">
-      <ToolBar Background="{StaticResource PanelBrush}" Foreground="{StaticResource FgBrush}">
+      <ToolBar>
         <Button Content="↻ Sync" Click="Sync_Click" ToolTip="git fetch"/>
         <Button Content="⎇ Новая ветка" Click="NewBranch_Click"/>
         <Button Content="📄 Новый скрипт" Click="NewScript_Click"/>
@@ -40,17 +40,17 @@
       </ToolBar>
     </ToolBarTray>
 
-    <StatusBar DockPanel.Dock="Bottom" Background="{StaticResource StatusBrush}" Foreground="White" Height="28">
+    <StatusBar DockPanel.Dock="Bottom" Height="28">
       <StatusBarItem>
-        <TextBlock x:Name="StatusText" Text="готов"/>
+        <TextBlock x:Name="StatusText" Text="готов" Foreground="White"/>
       </StatusBarItem>
       <Separator/>
       <StatusBarItem>
-        <TextBlock x:Name="BranchStatusText" Text="ветка: —"/>
+        <TextBlock x:Name="BranchStatusText" Text="ветка: —" Foreground="White"/>
       </StatusBarItem>
       <Separator/>
       <StatusBarItem>
-        <TextBlock Text="UTF-8"/>
+        <TextBlock Text="UTF-8" Foreground="White"/>
       </StatusBarItem>
     </StatusBar>
 
@@ -71,54 +71,52 @@
         </Grid.ColumnDefinitions>
 
         <DockPanel Grid.Column="0" Background="{StaticResource PanelBrush}">
-          <TextBlock DockPanel.Dock="Top" Text="ПРОЕКТ" FontWeight="SemiBold" Margin="8,8,8,4"/>
+          <TextBlock DockPanel.Dock="Top" Text="ПРОЕКТ" FontWeight="SemiBold" Margin="8,8,8,4"
+                     Foreground="{StaticResource FgBrush}"/>
           <TreeView x:Name="ProjectTree"
-                    Background="{StaticResource PanelBrush}"
-                    Foreground="{StaticResource FgBrush}"
-                    BorderThickness="0"
                     MouseDoubleClick="ProjectTree_MouseDoubleClick"/>
         </DockPanel>
 
         <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
 
-        <DockPanel Grid.Column="2">
+        <DockPanel Grid.Column="2" Background="{StaticResource BgBrush}">
           <TextBlock x:Name="EditorPathText" DockPanel.Dock="Top"
-                     Text="(файл не выбран)" Margin="8,6" Foreground="#9CDCFE"/>
+                     Text="(файл не выбран)" Margin="8,6" Foreground="{StaticResource FgInfoBrush}"/>
           <avalonEdit:TextEditor x:Name="SqlEditor"
                                  FontFamily="Consolas"
                                  FontSize="13"
                                  ShowLineNumbers="True"
                                  WordWrap="False"
-                                 Background="#1E1E1E"
-                                 Foreground="#D4D4D4"
+                                 Background="{StaticResource BgBrush}"
+                                 Foreground="{StaticResource FgBrush}"
                                  LineNumbersForeground="#858585"/>
         </DockPanel>
 
         <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
 
         <DockPanel Grid.Column="4" Background="{StaticResource PanelBrush}">
-          <TextBlock DockPanel.Dock="Top" Text="ВЕТКА / PR" FontWeight="SemiBold" Margin="8,8,8,4"/>
+          <TextBlock DockPanel.Dock="Top" Text="ВЕТКА / PR" FontWeight="SemiBold" Margin="8,8,8,4"
+                     Foreground="{StaticResource FgBrush}"/>
           <StackPanel DockPanel.Dock="Top" Margin="8,0,8,8">
-            <TextBlock x:Name="SideBranchText" Text="Ветка: —" TextWrapping="Wrap"/>
-            <TextBlock x:Name="SideBaseText" Text="от: —" Margin="0,4,0,0" Foreground="#888888"/>
+            <TextBlock x:Name="SideBranchText" Text="Ветка: —" TextWrapping="Wrap"
+                       Foreground="{StaticResource FgBrush}"/>
+            <TextBlock x:Name="SideBaseText" Text="от: —" Margin="0,4,0,0"
+                       Foreground="{StaticResource FgMutedBrush}"/>
             <Button Content="Create PR" Click="CreatePr_Click" Margin="0,12,0,0" HorizontalAlignment="Stretch"/>
           </StackPanel>
-          <TextBlock DockPanel.Dock="Top" Text="Изменения:" Margin="8,0,8,4" Foreground="#888888"/>
-          <ListBox x:Name="ChangesList"
-                   Background="{StaticResource PanelBrush}"
-                   Foreground="{StaticResource FgBrush}"
-                   BorderThickness="0"/>
+          <TextBlock DockPanel.Dock="Top" Text="Изменения:" Margin="8,0,8,4"
+                     Foreground="{StaticResource FgMutedBrush}"/>
+          <ListBox x:Name="ChangesList"/>
         </DockPanel>
       </Grid>
 
       <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
 
       <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
-        <TextBlock DockPanel.Dock="Top" Text="Лог" FontWeight="SemiBold" Margin="8,6,8,2"/>
+        <TextBlock DockPanel.Dock="Top" Text="Лог" FontWeight="SemiBold" Margin="8,6,8,2"
+                   Foreground="{StaticResource FgBrush}"/>
         <ListBox x:Name="LogList"
-                 Background="#1E1E1E"
-                 Foreground="#CCCCCC"
-                 BorderThickness="0"
+                 Background="{StaticResource BgBrush}"
                  FontFamily="Consolas"
                  FontSize="12"/>
       </DockPanel>

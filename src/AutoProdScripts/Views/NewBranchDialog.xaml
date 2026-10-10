@@ -9,7 +9,7 @@
         ResizeMode="NoResize">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <Button Content="Отмена" Click="Cancel_Click" Background="#3C3C3C" Width="100"/>
+      <Button Content="Отмена" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Width="100"/>
       <Button Content="Создать от base + checkout" Click="Create_Click" Width="200" Margin="8,0,0,0"/>
     </StackPanel>
     <StackPanel>
@@ -21,7 +21,7 @@
                 ToolTip="baseBranch_yyyyMMddHHmm"/>
         <TextBox x:Name="BranchNameBox"/>
       </DockPanel>
-      <TextBlock Text="Авто: {baseBranch}_{yyyyMMddHHmm}" Foreground="#888888" Margin="0,6,0,0"/>
+      <TextBlock Text="Авто: {baseBranch}_{yyyyMMddHHmm}" Foreground="{StaticResource FgMutedBrush}" Margin="0,6,0,0"/>
     </StackPanel>
   </DockPanel>
 </Window>

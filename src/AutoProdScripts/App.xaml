@@ -3,13 +3,37 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
+    <!-- Dark IDE theme — light foregrounds on dark surfaces (~WCAG-ish contrast) -->
     <SolidColorBrush x:Key="BgBrush" Color="#1E1E1E"/>
     <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
+    <SolidColorBrush x:Key="PanelAltBrush" Color="#2D2D30"/>
     <SolidColorBrush x:Key="BorderBrush" Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="FgBrush" Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="InputBrush" Color="#3C3C3C"/>
+    <SolidColorBrush x:Key="FgBrush" Color="#D4D4D4"/>
+    <SolidColorBrush x:Key="FgMutedBrush" Color="#A0A0A0"/>
+    <SolidColorBrush x:Key="FgInfoBrush" Color="#8FB8D4"/>
     <SolidColorBrush x:Key="AccentBrush" Color="#0E639C"/>
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#1177BB"/>
     <SolidColorBrush x:Key="StatusBrush" Color="#007ACC"/>
+    <SolidColorBrush x:Key="SelectionBrush" Color="#264F78"/>
+    <SolidColorBrush x:Key="MenuPopupBrush" Color="#2D2D30"/>
+
+    <!-- Override system chrome used by Menu / ComboBox / TreeView defaults -->
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#D4D4D4"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#D4D4D4"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuTextBrushKey}" Color="#D4D4D4"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBrushKey}" Color="#2D2D30"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBarBrushKey}" Color="#252526"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#3C3C3C"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlLightBrushKey}" Color="#3C3C3C"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}" Color="#3C3C3C"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#1E1E1E"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#264F78"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#F0F0F0"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#3A3D41"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#D4D4D4"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.GrayTextBrushKey}" Color="#A0A0A0"/>
+
     <Style TargetType="Button">
       <Setter Property="Padding" Value="10,4"/>
       <Setter Property="Margin" Value="2,0"/>
@@ -38,28 +62,156 @@
         </Setter.Value>
       </Setter>
     </Style>
+
+    <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="{StaticResource InputBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+    </Style>
+
     <Style TargetType="TextBox">
       <Setter Property="Padding" Value="6,4"/>
-      <Setter Property="Background" Value="#3C3C3C"/>
+      <Setter Property="Background" Value="{StaticResource InputBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
       <Setter Property="BorderBrush" Value="#555555"/>
-      <Setter Property="CaretBrush" Value="White"/>
+      <Setter Property="CaretBrush" Value="#F0F0F0"/>
+      <Setter Property="SelectionBrush" Value="{StaticResource SelectionBrush}"/>
     </Style>
+
     <Style TargetType="PasswordBox">
       <Setter Property="Padding" Value="6,4"/>
-      <Setter Property="Background" Value="#3C3C3C"/>
+      <Setter Property="Background" Value="{StaticResource InputBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
       <Setter Property="BorderBrush" Value="#555555"/>
-      <Setter Property="CaretBrush" Value="White"/>
+      <Setter Property="CaretBrush" Value="#F0F0F0"/>
+      <Setter Property="SelectionBrush" Value="{StaticResource SelectionBrush}"/>
     </Style>
+
+    <!-- Was Foreground=#1E1E1E on #3C3C3C (black-on-dark). -->
     <Style TargetType="ComboBox">
       <Setter Property="Padding" Value="6,4"/>
-      <Setter Property="Background" Value="#3C3C3C"/>
-      <Setter Property="Foreground" Value="#1E1E1E"/>
+      <Setter Property="Background" Value="{StaticResource InputBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="BorderBrush" Value="#555555"/>
     </Style>
+
+    <Style TargetType="ComboBoxItem">
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="Background" Value="{StaticResource MenuPopupBrush}"/>
+      <Setter Property="Padding" Value="6,3"/>
+      <Style.Triggers>
+        <Trigger Property="IsHighlighted" Value="True">
+          <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+          <Setter Property="Foreground" Value="#F0F0F0"/>
+        </Trigger>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+          <Setter Property="Foreground" Value="#F0F0F0"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
     <Style TargetType="Label">
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
       <Setter Property="Padding" Value="0,4,0,2"/>
+    </Style>
+
+    <Style TargetType="Menu">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+    </Style>
+
+    <Style TargetType="MenuItem">
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Style.Triggers>
+        <Trigger Property="Role" Value="TopLevelHeader">
+          <Setter Property="Background" Value="Transparent"/>
+          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+        </Trigger>
+        <Trigger Property="Role" Value="TopLevelItem">
+          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+        </Trigger>
+        <Trigger Property="Role" Value="SubmenuHeader">
+          <Setter Property="Background" Value="{StaticResource MenuPopupBrush}"/>
+          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+        </Trigger>
+        <Trigger Property="Role" Value="SubmenuItem">
+          <Setter Property="Background" Value="{StaticResource MenuPopupBrush}"/>
+          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+        </Trigger>
+        <Trigger Property="IsHighlighted" Value="True">
+          <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+          <Setter Property="Foreground" Value="#F0F0F0"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style TargetType="ContextMenu">
+      <Setter Property="Background" Value="{StaticResource MenuPopupBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+    </Style>
+
+    <Style TargetType="ToolBar">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+    </Style>
+
+    <Style TargetType="StatusBar">
+      <Setter Property="Background" Value="{StaticResource StatusBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <Style TargetType="StatusBarItem">
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <Style TargetType="TreeView">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <Style TargetType="TreeViewItem">
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="Padding" Value="2,1"/>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+          <Setter Property="Foreground" Value="#F0F0F0"/>
+        </Trigger>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#2A2D2E"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style TargetType="ListBox">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="Padding" Value="6,3"/>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
+          <Setter Property="Foreground" Value="#F0F0F0"/>
+        </Trigger>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#2A2D2E"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style TargetType="ScrollViewer">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <Style TargetType="Separator">
+      <Setter Property="Background" Value="{StaticResource BorderBrush}"/>
     </Style>
   </Application.Resources>
 </Application>
