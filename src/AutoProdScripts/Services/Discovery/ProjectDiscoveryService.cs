@@ -6,7 +6,7 @@ public sealed class ProjectDiscoveryService
 {
     private static readonly HashSet<string> ExcludedNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".git", ".vs", ".idea", "bin", "obj", "node_modules", "packages", ".nuget"
+        ".git", ".vs", ".idea", "bin", "obj", "node_modules", "packages", ".nuget", "mapping"
     };
 
     public IReadOnlyList<string> DiscoverWorkFolders(string projectRoot, int maxDepth = 3)

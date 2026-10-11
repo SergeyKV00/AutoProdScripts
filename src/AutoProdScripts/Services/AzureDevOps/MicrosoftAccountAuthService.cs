@@ -1,16 +1,19 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Interop;
 using Azure.Core;
 using Azure.Identity;
+using Azure.Identity.Broker;
 
 namespace AutoProdScripts.Services.AzureDevOps;
 
 public static class MicrosoftAccountAuthService
 {
-    public const string CacheName = "AutoProdScripts.MicrosoftAccount.v2";
+    public const string CacheName = "AutoProdScripts.MicrosoftAccount.v3";
 
-    // Public client used by Visual Studio and Git Credential Manager.
-    // It accepts the work and Microsoft accounts people actually use for Azure DevOps.
-    // The Azure CLI client rejects those accounts as "personal".
+    // The same public client Visual Studio uses. A browser login to this client
+    // rejects personal Microsoft accounts. Visual Studio itself asks Windows (WAM)
+    // and enables legacy MSA passthrough, which is what lets a Gmail Microsoft account in.
     private const string AzureDevOpsClientId = "872cd9fa-d31f-45e0-9eab-6e460a02d1f1";
 
     private static readonly string[] Scopes =
@@ -123,14 +126,15 @@ public static class MicrosoftAccountAuthService
 
     private static InteractiveBrowserCredential CreateCredential(AuthenticationRecord? record)
     {
-        var options = new InteractiveBrowserCredentialOptions
+        var options = new InteractiveBrowserCredentialBrokerOptions(GetParentWindowHandle())
         {
             ClientId = AzureDevOpsClientId,
-            TenantId = "common",
+            TenantId = "organizations",
             RedirectUri = new Uri("http://localhost"),
             AuthenticationRecord = record,
             LoginHint = record?.Username,
             DisableAutomaticAuthentication = true,
+            IsLegacyMsaPassthroughEnabled = true,
             TokenCachePersistenceOptions = new TokenCachePersistenceOptions
             {
                 Name = CacheName
@@ -138,6 +142,22 @@ public static class MicrosoftAccountAuthService
         };
         options.AdditionallyAllowedTenants.Add("*");
         return new InteractiveBrowserCredential(options);
+    }
+
+    private static IntPtr GetParentWindowHandle()
+    {
+        var app = Application.Current;
+        if (app is null)
+            return IntPtr.Zero;
+        if (app.Dispatcher.CheckAccess())
+            return HandleOfActiveWindow(app);
+        return app.Dispatcher.Invoke(() => HandleOfActiveWindow(app));
+    }
+
+    private static IntPtr HandleOfActiveWindow(Application app)
+    {
+        var window = app.Windows.OfType<Window>().FirstOrDefault(item => item.IsActive) ?? app.MainWindow;
+        return window is null ? IntPtr.Zero : new WindowInteropHelper(window).Handle;
     }
 
     private static bool IsInteractionRequired(Exception ex) =>
@@ -155,7 +175,7 @@ public static class MicrosoftAccountAuthService
         if (message.Contains("личной", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("personal", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("AADSTS50020", StringComparison.OrdinalIgnoreCase))
-            return "Microsoft не принял эту учётную запись. Выберите ту же, которой открываете cit-damu, и при запросе укажите рабочую, не личную Outlook.";
+            return "Microsoft открыл вход только для рабочей учётной записи. Войдите ещё раз и в окне Windows выберите ту же учётную запись, что и в Visual Studio.";
 
         if (message.Contains("AADSTS65001", StringComparison.OrdinalIgnoreCase))
             return "Администратор организации должен разрешить доступ к Azure DevOps. " + message;

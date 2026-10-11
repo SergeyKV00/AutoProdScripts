@@ -1,0 +1,25 @@
+<Window x:Class="AutoProdScripts.Views.UseMappingReportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Анализ папок и USE"
+        Height="640" Width="760"
+        MinHeight="420" MinWidth="560"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgBrush}"
+        Foreground="{StaticResource FgBrush}">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button Content="Черновик YAML" Click="Export_Click" Style="{StaticResource SecondaryButton}" Width="140"/>
+      <Button Content="Дописать однозначные" Click="Merge_Click" Width="180" Margin="8,0,0,0"/>
+      <Button Content="Закрыть" IsCancel="True" Click="Close_Click" Style="{StaticResource SecondaryButton}" Width="100" Margin="8,0,0,0"/>
+    </StackPanel>
+    <DockPanel>
+      <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
+                 Foreground="{StaticResource FgMutedBrush}"
+                 Text="Конфликты в файл mapping не записываются. Однозначные пары можно дописать, разные USE в одной папке остаются только в отчёте."/>
+      <TextBox x:Name="ReportBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+               FontFamily="Consolas" FontSize="12" VerticalScrollBarVisibility="Auto"
+               HorizontalScrollBarVisibility="Auto"/>
+    </DockPanel>
+  </DockPanel>
+</Window>

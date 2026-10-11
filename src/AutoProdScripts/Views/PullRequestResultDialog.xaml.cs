@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -12,7 +11,6 @@ public partial class PullRequestResultDialog : Window
 {
     private readonly bool _hasTelegram;
     private Hyperlink? _prLink;
-    private Run? _tagsRun;
     private string _linkCaption = string.Empty;
     private string _linkUrl = string.Empty;
 
@@ -34,7 +32,7 @@ public partial class PullRequestResultDialog : Window
 
         TelegramPanel.Visibility = Visibility.Visible;
         CopyMessageButton.Visibility = Visibility.Visible;
-        _linkCaption = string.IsNullOrWhiteSpace(telegram.LinkCaption) ? telegram.Text : telegram.LinkCaption;
+        _linkCaption = AutoPrTemplate.LinkCaptionOrDefault(telegram.LinkCaption);
         _linkUrl = string.IsNullOrWhiteSpace(telegram.LinkUrl) ? url ?? string.Empty : telegram.LinkUrl;
         if (!string.IsNullOrWhiteSpace(_linkUrl))
             UrlBox.Text = _linkUrl;
@@ -45,55 +43,26 @@ public partial class PullRequestResultDialog : Window
 
     private void BuildTelegramDocument(TelegramCompose telegram)
     {
-        var body = string.IsNullOrWhiteSpace(telegram.Template)
-            ? AutoPrTemplate.DefaultTelegramTemplate
-            : telegram.Template;
         var paragraph = new Paragraph { Margin = new Thickness(0) };
-        var pattern = new Regex(@"\{([^{}]+)\}");
-        var index = 0;
-        foreach (Match match in pattern.Matches(body))
+        TelegramPreviewRenderer.Render(
+            paragraph,
+            telegram.Template,
+            telegram.Text,
+            _linkCaption,
+            _linkUrl,
+            telegram.Tags,
+            telegram.Custom,
+            (Brush)FindResource("FgInfoBrush"),
+            url => OpenUri(url));
+        _prLink = paragraph.Inlines.OfType<Hyperlink>().FirstOrDefault();
+        var document = new FlowDocument
         {
-            if (match.Index > index)
-                paragraph.Inlines.Add(new Run(body[index..match.Index]));
-
-            var key = match.Groups[1].Value;
-            if (key.Equals("link", StringComparison.OrdinalIgnoreCase))
-                paragraph.Inlines.Add(CreateLink(_linkCaption, _linkUrl));
-            else if (key.Equals("tags", StringComparison.OrdinalIgnoreCase))
-            {
-                _tagsRun = new Run(TelegramMessage.FormatTags(telegram.Tags));
-                paragraph.Inlines.Add(_tagsRun);
-            }
-            else if (key.Equals("text", StringComparison.OrdinalIgnoreCase) ||
-                     key.Equals("title", StringComparison.OrdinalIgnoreCase))
-                paragraph.Inlines.Add(new Run(telegram.Text));
-            else
-                paragraph.Inlines.Add(new Run(match.Value));
-
-            index = match.Index + match.Length;
-        }
-
-        if (index < body.Length)
-            paragraph.Inlines.Add(new Run(body[index..]));
-
-        var document = new FlowDocument { PagePadding = new Thickness(2) };
+            PagePadding = new Thickness(2),
+            Background = Brushes.Transparent,
+            Foreground = (Brush)FindResource("FgBrush")
+        };
         document.Blocks.Add(paragraph);
         TelegramMessageBox.Document = document;
-        TelegramTagsBox.Text = telegram.Tags;
-    }
-
-    private Hyperlink CreateLink(string caption, string url)
-    {
-        var link = new Hyperlink(new Run(caption))
-        {
-            Foreground = (Brush)FindResource("FgInfoBrush"),
-            Cursor = Cursors.Hand
-        };
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            link.NavigateUri = uri;
-        link.Click += (_, _) => OpenUri(link.NavigateUri);
-        _prLink = link;
-        return link;
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -162,13 +131,6 @@ public partial class PullRequestResultDialog : Window
     private static string ReadLinkText(Hyperlink link) =>
         new TextRange(link.ContentStart, link.ContentEnd).Text.Trim();
 
-    private void TelegramTagsBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-    {
-        if (_tagsRun is null)
-            return;
-        _tagsRun.Text = TelegramMessage.FormatTags(TelegramTagsBox.Text);
-    }
-
     private void Open_Click(object sender, RoutedEventArgs e) => OpenUri(UrlBox.Text);
 
     private static void OpenUri(Uri? uri)
@@ -227,4 +189,5 @@ public sealed class TelegramCompose
     public string LinkCaption { get; init; } = string.Empty;
     public string LinkUrl { get; init; } = string.Empty;
     public string Tags { get; init; } = string.Empty;
+    public IReadOnlyList<TelegramCustomTemplate>? Custom { get; init; }
 }

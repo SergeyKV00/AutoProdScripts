@@ -1,5 +1,8 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using AutoProdScripts.Models;
 using AutoProdScripts.Services.AzureDevOps;
@@ -16,6 +19,7 @@ public partial class SettingsWindow : Window
     private bool _autoTemplateTouched;
     private List<SavedReviewer> _autoReviewers = new();
     private readonly List<CustomTemplateRow> _customTemplates = new();
+    private readonly List<string> _recipients = new();
 
     public AppSettings? ResultSettings { get; private set; }
     public string? ResultPat { get; private set; }
@@ -48,13 +52,15 @@ public partial class SettingsWindow : Window
         TelegramTemplateBox.Text = string.IsNullOrWhiteSpace(s.TelegramMessageTemplate)
             ? AutoPrTemplate.DefaultTelegramTemplate
             : s.TelegramMessageTemplate;
-        TelegramTagsBox.Text = s.TelegramTags ?? string.Empty;
+        TelegramLinkCaptionBox.Text = AutoPrTemplate.LinkCaptionOrDefault(s.TelegramLinkCaption);
+        LoadRecipients(s.TelegramTags);
         foreach (var part in s.TelegramCustomTemplates ?? new List<TelegramCustomTemplate>())
         {
             if (!string.IsNullOrWhiteSpace(part.Name))
                 AddCustomTemplateRow(part.Name.Trim(), part.Value);
         }
         UpdateAutoReviewersLabel();
+        RefreshTokenMenu();
         UpdateAutoPreview();
         _microsoftAuth = _openMicrosoftLogin || s.AuthMode == AzureAuthMode.MicrosoftAccount;
         ApplyAuthModePanels();
@@ -318,6 +324,38 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        CommitRecipientInput();
+        if (string.IsNullOrWhiteSpace(TelegramTemplateBox.Text) || HasBrokenToken(TelegramTemplateBox.Text))
+        {
+            MessageBox.Show(this, "Шаблон сообщения пуст или в нём не закрыта фигурная скобка.", "Настройка",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            SettingsTabs.SelectedItem = AutoPrTab;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(TelegramLinkCaptionBox.Text))
+        {
+            MessageBox.Show(this, "Укажите текст ссылки на PR.", "Настройка",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            SettingsTabs.SelectedItem = AutoPrTab;
+            TelegramLinkCaptionBox.Focus();
+            return;
+        }
+
+        var previewLength = TelegramMessage.Build(
+            TelegramTemplateBox.Text,
+            TelegramPreviewRenderer.DemoText,
+            TelegramLinkCaptionBox.Text,
+            string.Join(' ', _recipients),
+            CurrentCustomTemplates()).Length;
+        if (previewLength > AutoPrTemplate.TelegramMaxLength)
+        {
+            MessageBox.Show(this, $"Сообщение длиннее {AutoPrTemplate.TelegramMaxLength} символов — Telegram его не примет.",
+                "Настройка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            SettingsTabs.SelectedItem = AutoPrTab;
+            return;
+        }
+
         ResultSettings = new AppSettings
         {
             ProjectPath = path,
@@ -334,7 +372,8 @@ public partial class SettingsWindow : Window
             AutoBaseBranch = AutoBaseBranchBox.Text.Trim(),
             AutoBranchNameTemplate = AutoBranchTemplateBox.Text.Trim(),
             TelegramMessageTemplate = TelegramTemplateBox.Text,
-            TelegramTags = TelegramTagsBox.Text.Trim(),
+            TelegramLinkCaption = TelegramLinkCaptionBox.Text.Trim(),
+            TelegramTags = string.Join(' ', _recipients),
             TelegramCustomTemplates = _customTemplates
                 .Select(row => new TelegramCustomTemplate { Name = row.Name, Value = row.ValueBox.Text })
                 .ToList(),
@@ -361,7 +400,7 @@ public partial class SettingsWindow : Window
 
     private void UpdateAutoPreview()
     {
-        if (BranchPreviewText is null || TelegramPreviewBox is null)
+        if (BranchPreviewText is null || TelegramPreviewBox is null || TelegramLinkCaptionBox is null || TelegramCountText is null)
             return;
 
         var baseBranch = string.IsNullOrWhiteSpace(AutoBaseBranchBox.Text) ? "master" : AutoBaseBranchBox.Text.Trim();
@@ -369,21 +408,214 @@ public partial class SettingsWindow : Window
         BranchPreviewText.Text = string.IsNullOrWhiteSpace(branch)
             ? "Пример ветки: —"
             : $"Пример ветки: {branch}";
-        TelegramPreviewBox.Text = TelegramMessage.Build(
+
+        var custom = CurrentCustomTemplates();
+        var message = TelegramMessage.Build(
             TelegramTemplateBox.Text,
-            "Скрипты по заявкам",
-            "Скрипты по заявкам",
-            TelegramTagsBox.Text,
-            _customTemplates.Select(row => new TelegramCustomTemplate { Name = row.Name, Value = row.ValueBox.Text }));
+            TelegramPreviewRenderer.DemoText,
+            TelegramLinkCaptionBox.Text,
+            string.Join(' ', _recipients),
+            custom);
+        var count = message.Length;
+        TelegramCountText.Text = $"{count} / {AutoPrTemplate.TelegramMaxLength}";
+        TelegramCountText.Foreground = (Brush)FindResource(count > AutoPrTemplate.TelegramMaxLength ? "FgBrush" : "FgMutedBrush");
+        if (count > AutoPrTemplate.TelegramMaxLength)
+            TelegramCountText.Foreground = Brushes.IndianRed;
+
+        var paragraph = new Paragraph { Margin = new Thickness(0) };
+        TelegramPreviewRenderer.Render(
+            paragraph,
+            TelegramTemplateBox.Text,
+            TelegramPreviewRenderer.DemoText,
+            TelegramLinkCaptionBox.Text,
+            TelegramPreviewRenderer.DemoUrl,
+            string.Join(' ', _recipients),
+            custom,
+            (Brush)FindResource("FgInfoBrush"),
+            openLink: null);
+        var document = new FlowDocument
+        {
+            PagePadding = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = (Brush)FindResource("FgBrush")
+        };
+        document.Blocks.Add(paragraph);
+        TelegramPreviewBox.Document = document;
+    }
+
+    private void OpenTokenMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { ContextMenu: { } menu })
+            return;
+        RefreshTokenMenu();
+        menu.PlacementTarget = (UIElement)sender;
+        menu.IsOpen = true;
+    }
+
+    private void RefreshTokenMenu()
+    {
+        if (InsertTokenButton is null)
+            return;
+        InsertTokenButton.ContextMenu ??= new ContextMenu();
+        var menu = InsertTokenButton.ContextMenu;
+        menu.Items.Clear();
+        AddTokenItem(menu, "link", "{link} — ссылка на PR");
+        AddTokenItem(menu, "tags", "{tags} — получатели");
+        AddTokenItem(menu, "text", "{text} — описание скриптов, необязательно");
+    }
+
+    private void AddTokenItem(ContextMenu menu, string key, string header)
+    {
+        var item = new MenuItem { Header = header, Tag = key };
+        item.Click += InsertTelegramToken_Click;
+        menu.Items.Add(item);
     }
 
     private void InsertTelegramToken_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not System.Windows.Controls.Button { Tag: string key } || string.IsNullOrWhiteSpace(key))
+        if (sender is not FrameworkElement { Tag: string key } || string.IsNullOrWhiteSpace(key))
             return;
         InsertIntoBox(TelegramTemplateBox, "{" + key + "}");
         _autoTemplateTouched = true;
     }
+
+    private void LoadRecipients(string? raw)
+    {
+        _recipients.Clear();
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            foreach (var part in raw.Split(new[] { ' ', ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+                RememberRecipient(part);
+        }
+
+        RenderRecipients();
+    }
+
+    private void AddRecipient_Click(object sender, RoutedEventArgs e) => CommitRecipientInput();
+
+    private void RecipientInputBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+        e.Handled = true;
+        CommitRecipientInput();
+    }
+
+    private void CommitRecipientInput()
+    {
+        if (RecipientInputBox is null || string.IsNullOrWhiteSpace(RecipientInputBox.Text))
+            return;
+        foreach (var part in RecipientInputBox.Text.Split(new[] { ' ', ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+            RememberRecipient(part);
+        RecipientInputBox.Text = string.Empty;
+        RenderRecipients();
+        _autoTemplateTouched = true;
+        UpdateAutoPreview();
+    }
+
+    private void RememberRecipient(string raw)
+    {
+        var name = raw.Trim();
+        if (name.Length == 0)
+            return;
+        if (!name.StartsWith('@'))
+            name = "@" + name;
+        if (_recipients.Any(item => item.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            return;
+        _recipients.Add(name);
+    }
+
+    private void RenderRecipients()
+    {
+        if (RecipientHost is null)
+            return;
+        RecipientHost.Children.Clear();
+        foreach (var name in _recipients.ToList())
+        {
+            var label = new TextBlock
+            {
+                Text = name,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)FindResource("FgBrush")
+            };
+            var remove = new Button
+            {
+                Content = "×",
+                Style = (Style)FindResource("IconButton"),
+                Width = 22,
+                Height = 22,
+                Margin = new Thickness(4, 0, 0, 0),
+                ToolTip = "Удалить"
+            };
+            var edit = new Button
+            {
+                Style = (Style)FindResource("IconButton"),
+                Width = 22,
+                Height = 22,
+                Margin = new Thickness(2, 0, 0, 0),
+                ToolTip = "Изменить",
+                Content = new System.Windows.Shapes.Path
+                {
+                    Width = 12,
+                    Height = 12,
+                    Stretch = Stretch.Uniform,
+                    Fill = (Brush)FindResource("FgBrush"),
+                    Data = Geometry.Parse("M3,17.25 L3,21 L6.75,21 L17.81,9.94 L14.06,6.19 Z M20.71,7.04 C21.1,6.65 21.1,6.02 20.71,5.63 L18.37,3.29 C17.98,2.9 17.35,2.9 16.96,3.29 L15.13,5.12 L18.88,8.87 Z")
+                }
+            };
+            var chip = new Border
+            {
+                Background = (Brush)FindResource("InputBrush"),
+                BorderBrush = (Brush)FindResource("BorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 2, 4, 2),
+                Margin = new Thickness(0, 0, 6, 6)
+            };
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(label);
+            row.Children.Add(edit);
+            row.Children.Add(remove);
+            chip.Child = row;
+            var captured = name;
+            remove.Click += (_, _) =>
+            {
+                _recipients.Remove(captured);
+                RenderRecipients();
+                _autoTemplateTouched = true;
+                UpdateAutoPreview();
+            };
+            edit.Click += (_, _) =>
+            {
+                _recipients.Remove(captured);
+                RecipientInputBox.Text = captured;
+                RecipientInputBox.Focus();
+                RecipientInputBox.CaretIndex = RecipientInputBox.Text.Length;
+                RenderRecipients();
+                UpdateAutoPreview();
+            };
+            RecipientHost.Children.Add(chip);
+        }
+    }
+
+    private static bool HasBrokenToken(string template)
+    {
+        var depth = 0;
+        foreach (var ch in template)
+        {
+            if (ch == '{')
+                depth++;
+            else if (ch == '}')
+                depth--;
+            if (depth < 0)
+                return true;
+        }
+
+        return depth != 0;
+    }
+
+    private IEnumerable<TelegramCustomTemplate> CurrentCustomTemplates() =>
+        _customTemplates.Select(row => new TelegramCustomTemplate { Name = row.Name, Value = row.ValueBox.Text });
 
     private void AddCustomTemplate_Click(object sender, RoutedEventArgs e)
     {
@@ -406,6 +638,7 @@ public partial class SettingsWindow : Window
         InsertIntoBox(TelegramTemplateBox, "{" + name + "}");
         CustomTemplateNameBox.Text = string.Empty;
         _autoTemplateTouched = true;
+        RefreshTokenMenu();
         UpdateAutoPreview();
     }
 
@@ -460,6 +693,7 @@ public partial class SettingsWindow : Window
             CustomTemplatesHost.Children.Remove(panel);
             _customTemplates.Remove(row);
             _autoTemplateTouched = true;
+            RefreshTokenMenu();
             UpdateAutoPreview();
         };
         _customTemplates.Add(row);
@@ -494,19 +728,56 @@ public partial class SettingsWindow : Window
 
     private void UpdateAutoReviewersLabel()
     {
+        if (AutoReviewersHost is not null)
+            AutoReviewersHost.Children.Clear();
+
         if (_autoReviewers.Count == 0)
         {
-            AutoReviewersText.Text = "не выбраны";
+            AutoReviewersText.Text = "Ревьюверы не выбраны";
+            AutoReviewersText.Visibility = Visibility.Visible;
             return;
         }
 
-        AutoReviewersText.Text = string.Join(", ", _autoReviewers.Select(r =>
+        AutoReviewersText.Visibility = Visibility.Collapsed;
+        if (AutoReviewersHost is null)
+            return;
+
+        foreach (var reviewer in _autoReviewers)
         {
-            var name = string.IsNullOrWhiteSpace(r.DisplayName) ? r.UniqueName : r.DisplayName;
+            var name = string.IsNullOrWhiteSpace(reviewer.DisplayName) ? reviewer.UniqueName : reviewer.DisplayName;
             if (string.IsNullOrWhiteSpace(name))
-                name = r.Id;
-            return r.IsRequired ? $"{name} (обязательный)" : name;
-        }));
+                name = reviewer.Id;
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(new TextBlock
+            {
+                Text = name,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("FgBrush")
+            });
+            if (reviewer.IsRequired)
+            {
+                row.Children.Add(new TextBlock
+                {
+                    Text = "обязательный",
+                    Margin = new Thickness(8, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = (Brush)FindResource("FgInfoBrush")
+                });
+            }
+
+            AutoReviewersHost.Children.Add(new Border
+            {
+                Background = (Brush)FindResource(reviewer.IsRequired ? "SelectionBrush" : "InputBrush"),
+                BorderBrush = (Brush)FindResource(reviewer.IsRequired ? "AccentBrush" : "BorderBrush"),
+                BorderThickness = new Thickness(reviewer.IsRequired ? 2 : 1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(10, 4, 10, 4),
+                Margin = new Thickness(0, 0, 8, 8),
+                Child = row
+            });
+        }
     }
 
     private async void PickAutoReviewers_Click(object sender, RoutedEventArgs e)

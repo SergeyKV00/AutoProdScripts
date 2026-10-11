@@ -144,6 +144,18 @@ public sealed class GitCliService
     public async Task<GitResult> FetchAsync(string remote = "origin", CancellationToken ct = default)
         => await RunAsync(ct, "fetch", remote, "--prune").ConfigureAwait(false);
 
+    /// <summary>
+    /// Pull the checked-out branch from the remote of the same name. Does not push or prune.
+    /// </summary>
+    public async Task<GitResult> PullCurrentBranchAsync(string remote = "origin", CancellationToken ct = default)
+    {
+        var branch = await GetCurrentBranchAsync(ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(branch) || branch.Equals("HEAD", StringComparison.OrdinalIgnoreCase))
+            return new GitResult(false, string.Empty, "Нет текущей ветки для pull.", 1);
+
+        return await RunAsync(ct, "pull", remote, branch).ConfigureAwait(false);
+    }
+
     public async Task<GitResult> StashPushAsync(CancellationToken ct = default)
         => await RunAsync(ct, "stash", "push", "-u", "-m", "autopr").ConfigureAwait(false);
 

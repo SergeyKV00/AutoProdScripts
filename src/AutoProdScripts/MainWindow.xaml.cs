@@ -11,6 +11,7 @@ using AutoProdScripts.Models;
 using AutoProdScripts.Services.AzureDevOps;
 using AutoProdScripts.Services.Discovery;
 using AutoProdScripts.Services.Git;
+using AutoProdScripts.Services.Mapping;
 using AutoProdScripts.Themes;
 using AutoProdScripts.Views;
 using ICSharpCode.AvalonEdit.Document;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
     private OpenDocument? _activeDocument;
     private string? _currentFilePath;
     private bool _dirty;
+    private bool _testMode;
     private bool _suppressEditorEvents;
     private string? _currentBranch;
     private string? _selectedFolderRel;
@@ -69,7 +71,36 @@ public partial class MainWindow : Window
         {
             Save_Click(sender, e);
             e.Handled = true;
+            return;
         }
+
+        if (e.Key == Key.D && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            _testMode = !_testMode;
+            TestAutoPrHost.Visibility = _testMode ? Visibility.Visible : Visibility.Collapsed;
+            var message = _testMode ? "тестовый режим включён" : "тестовый режим выключен";
+            App.Log.Info(message);
+            SetStatus(message);
+            e.Handled = true;
+        }
+    }
+
+    private void TestAutoPr_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = App.Settings.Current;
+        var text = TelegramPreviewRenderer.DemoText;
+        var pr = new PullRequestResult(
+            true,
+            128,
+            TelegramPreviewRenderer.DemoUrl,
+            "Тестовый PR. Изменения в git не отправлялись, pull request не создавался.",
+            text);
+        ShowTelegramResult(
+            "Тестовый Pull Request #128",
+            "Режим проверки шаблона. Git и Azure DevOps не вызывались.",
+            pr,
+            text,
+            settings);
     }
 
     private async Task OnLoadedAsync()
@@ -124,6 +155,7 @@ public partial class MainWindow : Window
         }
 
         RefreshTree();
+        ReloadUseMapping(showError: false);
         await RefreshBranchUiAsync();
         await RefreshChangesAsync();
         RefreshAuthStatus();
@@ -616,6 +648,30 @@ public partial class MainWindow : Window
         await RefreshChangesAsync();
     }
 
+    private async void Pull_Click(object sender, RoutedEventArgs e)
+    {
+        if (_git is null) return;
+        SetStatus("pull…");
+        var remote = App.Settings.Current.RemoteName;
+        var result = await _git.PullCurrentBranchAsync(remote);
+        if (result.Success)
+        {
+            var detail = OneLine(result.CombinedOutput);
+            App.Log.Info(string.IsNullOrWhiteSpace(detail) ? $"pull ok ({remote})" : $"pull ok ({remote}): {detail}");
+            SetStatus("pull ok");
+            RefreshTree();
+        }
+        else
+        {
+            App.Log.Error($"pull failed: {result.CombinedOutput}");
+            SetStatus("ошибка pull");
+            MessageBox.Show(this, result.CombinedOutput, "Pull", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        await RefreshBranchUiAsync();
+        await RefreshChangesAsync();
+    }
+
     private static string OneLine(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -664,7 +720,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             return;
 
-        var folders = _discovery.DiscoverWorkFolders(root, maxDepth: 8);
+        var folders = DiscoverScriptFolders(root);
         var dlg = new NewScriptDialog(root, folders, _selectedFolderRel) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.CreatedFilePath is null)
             return;
@@ -1942,10 +1998,7 @@ public partial class MainWindow : Window
 
     private void ShowTelegramResult(string heading, string status, PullRequestResult pr, string text, AppSettings settings)
     {
-        var caption = string.IsNullOrWhiteSpace(text) ? "PR" : text;
-        var template = TelegramMessage.ExpandCustom(
-            settings.TelegramMessageTemplate,
-            settings.TelegramCustomTemplates);
+        var caption = AutoPrTemplate.LinkCaptionOrDefault(settings.TelegramLinkCaption);
         new PullRequestResultDialog(
             heading,
             status,
@@ -1953,16 +2006,246 @@ public partial class MainWindow : Window
             success: true,
             telegram: new TelegramCompose
             {
-                Template = template,
+                Template = settings.TelegramMessageTemplate ?? string.Empty,
                 Text = text,
                 LinkCaption = caption,
                 LinkUrl = pr.Url ?? string.Empty,
-                Tags = settings.TelegramTags ?? string.Empty
+                Tags = settings.TelegramTags ?? string.Empty,
+                Custom = settings.TelegramCustomTemplates
             })
         { Owner = this }.ShowDialog();
     }
 
-    private async void CreatePr_Click(object sender, RoutedEventArgs e)
+    private async void QuickAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var root = App.Settings.Current.ProjectPath;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root) || _git is null)
+            return;
+
+        var mapping = ReloadUseMapping(showError: true);
+        var folders = DiscoverScriptFolders(root);
+        var dialog = new QuickAddDialog(mapping, _mappingError, root, folders)
+        { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!await EnsureWorkBranchAsync())
+            return;
+
+        var wrote = TryWriteQuickScripts(root, dialog.Plans, out var firstPath);
+        if (firstPath is not null)
+        {
+            RefreshTree();
+            _ = RefreshChangesAsync();
+            OpenFile(firstPath);
+        }
+
+        if (!wrote)
+            return;
+
+        App.Log.Info($"быстрое добавление: файлов {dialog.Plans.Count}");
+        SetStatus("скрипты сохранены");
+        if (dialog.CreatePullRequest)
+            AutoPr_Click(AutoPrButton, new RoutedEventArgs());
+    }
+
+    private string? _mappingError;
+
+    private UseFolderMapping ReloadUseMapping(bool showError)
+    {
+        var root = App.Settings.Current.ProjectPath;
+        var mapping = UseFolderMappingFile.Load(out _mappingError);
+        if (_mappingError is not null)
+        {
+            App.Log.Error("mapping: " + _mappingError);
+            if (showError)
+                MessageBox.Show(this, _mappingError, "Mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        else if (showError)
+        {
+            var found = File.Exists(mapping.FilePath) ? mapping.Mappings.Count.ToString() : "файл ещё не создан";
+            App.Log.Info($"mapping обновлён: {found}");
+            SetStatus("mapping обновлён");
+        }
+
+        return mapping;
+    }
+
+    private void ReloadMapping_Click(object sender, RoutedEventArgs e) => ReloadUseMapping(showError: true);
+
+    private void OpenMappingFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var root = App.Settings.Current.ProjectPath;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return;
+        var mapping = ReloadUseMapping(showError: false);
+        var dir = Path.GetDirectoryName(mapping.FilePath);
+        if (string.IsNullOrWhiteSpace(dir))
+            return;
+        Directory.CreateDirectory(dir);
+        if (!File.Exists(mapping.FilePath))
+            UseFolderMappingFile.Save(mapping);
+        Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+    }
+
+    private void AnalyzeUse_Click(object sender, RoutedEventArgs e)
+    {
+        var root = App.Settings.Current.ProjectPath;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return;
+
+        SetStatus("анализ USE…");
+        var report = UseFolderAnalyzer.Analyze(root, UseFolderAnalyzer.ScriptRootFolder);
+        var mapping = ReloadUseMapping(showError: false);
+        var dialog = new UseMappingReportDialog(report, mapping) { Owner = this };
+        dialog.ShowDialog();
+        if (dialog.MappingChanged)
+            ReloadUseMapping(showError: false);
+        SetStatus("готов");
+    }
+
+    private IReadOnlyList<string> DiscoverScriptFolders(string root)
+    {
+        var scope = Path.Combine(root, UseFolderAnalyzer.ScriptRootFolder);
+        if (!Directory.Exists(scope))
+            return _discovery.DiscoverWorkFolders(root, maxDepth: 8);
+
+        var folders = new List<string> { UseFolderAnalyzer.ScriptRootFolder };
+        foreach (var folder in _discovery.DiscoverWorkFolders(scope, maxDepth: 8))
+        {
+            var relative = folder.Replace('\\', '/').Trim('/');
+            if (relative.Length == 0 || relative == ".")
+                continue;
+            folders.Add(UseFolderAnalyzer.ScriptRootFolder + "/" + relative);
+        }
+
+        return folders;
+    }
+
+    private async Task<bool> EnsureWorkBranchAsync()
+    {
+        if (_git is null)
+            return false;
+
+        var settings = App.Settings.Current;
+        var current = await _git.GetCurrentBranchAsync();
+        var bases = new[] { settings.LastBaseBranch, settings.AutoBaseBranch, "master", "main" }
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList();
+        if (!string.IsNullOrWhiteSpace(current) &&
+            !bases.Any(name => name.Equals(current, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        var baseBranch = !string.IsNullOrWhiteSpace(settings.AutoBaseBranch)
+            ? settings.AutoBaseBranch
+            : settings.LastBaseBranch;
+        if (string.IsNullOrWhiteSpace(baseBranch))
+            baseBranch = string.IsNullOrWhiteSpace(current) ? "master" : current;
+        var template = string.IsNullOrWhiteSpace(settings.AutoBranchNameTemplate)
+            ? AutoPrTemplate.DefaultBranchTemplate
+            : settings.AutoBranchNameTemplate;
+        var name = AutoPrTemplate.ExpandBranchName(template, baseBranch, DateTime.Now);
+        var answer = MessageBox.Show(this,
+            $"Сейчас ветка «{current ?? baseBranch}». Записать скрипты в новую ветку «{name}»?",
+            "Быстрое добавление", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes)
+            return false;
+
+        SetStatus("создание ветки…");
+        var created = await _git.CreateBranchAsync(name, baseBranch, settings.RemoteName);
+        RefreshTree();
+        await RefreshBranchUiAsync();
+        if (!created.Success)
+        {
+            App.Log.Error($"ветка: {created.CombinedOutput}");
+            MessageBox.Show(this, created.CombinedOutput, "Быстрое добавление",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+
+        App.Log.Info($"ветка создана: {name} от {baseBranch}");
+        return true;
+    }
+
+    private bool TryWriteQuickScripts(string root, IReadOnlyList<QuickScriptPlan> plans, out string? firstPath)
+    {
+        firstPath = null;
+        var missing = plans
+            .Select(plan => Path.GetFullPath(Path.Combine(root, plan.RelativeFolder.Replace('/', Path.DirectorySeparatorChar))))
+            .Where(dir => !Directory.Exists(dir))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (missing.Count > 0)
+        {
+            var list = string.Join(Environment.NewLine, missing.Select(dir => Path.GetRelativePath(root, dir)));
+            var create = MessageBox.Show(this,
+                "Этих папок ещё нет. Создать их?\n\n" + list,
+                "Быстрое добавление", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (create != MessageBoxResult.Yes)
+                return false;
+        }
+
+        var rootFull = Path.GetFullPath(root);
+        foreach (var plan in plans)
+        {
+            string path;
+            try
+            {
+                var dir = Path.GetFullPath(Path.Combine(rootFull, plan.RelativeFolder.Replace('/', Path.DirectorySeparatorChar)));
+                if (!dir.Equals(rootFull, StringComparison.OrdinalIgnoreCase) &&
+                    !dir.StartsWith(rootFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(this, $"Папка вне проекта: {plan.RelativeFolder}", "Быстрое добавление",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                Directory.CreateDirectory(dir);
+                path = Path.Combine(dir, plan.FileName);
+                if (File.Exists(path))
+                {
+                    var choice = MessageBox.Show(this,
+                        $"Файл уже есть:\n{Path.GetRelativePath(rootFull, path)}\n\nДа — перезаписать.\nНет — сохранить под новым именем.\nОтмена — прервать.",
+                        "Быстрое добавление", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                    if (choice == MessageBoxResult.Cancel)
+                        return false;
+                    if (choice == MessageBoxResult.No)
+                        path = NextFreePath(path);
+                }
+
+                File.WriteAllText(path, plan.Sql ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Быстрое добавление",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+
+            firstPath ??= path;
+        }
+
+        return true;
+    }
+
+    private static string NextFreePath(string path)
+    {
+        var dir = Path.GetDirectoryName(path)!;
+        var name = Path.GetFileNameWithoutExtension(path);
+        var ext = Path.GetExtension(path);
+        for (var i = 2; i < 1000; i++)
+        {
+            var candidate = Path.Combine(dir, $"{name}_{i}{ext}");
+            if (!File.Exists(candidate))
+                return candidate;
+        }
+
+        return Path.Combine(dir, $"{name}_{DateTime.Now:yyyyMMddHHmm}{ext}");
+    }
+
+    private async void CreatePr_Click(object sender, RoutedEventArgs e) => await RunCreatePrAsync();
+
+    private async Task RunCreatePrAsync()
     {
         if (_git is null)
             return;
