@@ -11,6 +11,10 @@
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="Файл">
         <MenuItem Header="Сохранить" Click="Save_Click" InputGestureText="Ctrl+S"/>
+        <MenuItem Header="Быстрое добавление…" Click="QuickAdd_Click"/>
+        <MenuItem Header="Проанализировать папки и USE" Click="AnalyzeUse_Click"/>
+        <MenuItem Header="Обновить mapping" Click="ReloadMapping_Click"/>
+        <MenuItem Header="Открыть папку mapping" Click="OpenMappingFolder_Click"/>
         <MenuItem Header="Настройки…" Click="Settings_Click"/>
         <Separator/>
         <MenuItem Header="Выход" Click="Exit_Click"/>
@@ -34,6 +38,7 @@
         <TextBlock Text="Файлы" VerticalAlignment="Center" Margin="4,0,6,0"
                    Foreground="{StaticResource FgMutedBrush}"/>
         <Button Content="📄 Новый скрипт" Click="NewScript_Click" Style="{StaticResource ToolbarButton}"/>
+        <Button Content="⚡ Быстрое добавление" Click="QuickAdd_Click" Style="{StaticResource ToolbarButton}"/>
         <Button Content="💾 Сохранить" Click="Save_Click" Style="{StaticResource ToolbarButton}"/>
         <Border Width="1" Margin="12,2" Background="{StaticResource BorderBrush}"/>
         <TextBlock Text="Git" VerticalAlignment="Center" Margin="4,0,6,0"
