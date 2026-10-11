@@ -666,7 +666,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             return;
 
-        var folders = _discovery.DiscoverWorkFolders(root, maxDepth: 8);
+        var folders = DiscoverScriptFolders(root);
         var dlg = new NewScriptDialog(root, folders, _selectedFolderRel) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.CreatedFilePath is null)
             return;
@@ -1971,7 +1971,7 @@ public partial class MainWindow : Window
             return;
 
         var mapping = ReloadUseMapping(showError: true);
-        var folders = _discovery.DiscoverWorkFolders(root, maxDepth: 8);
+        var folders = DiscoverScriptFolders(root);
         var dialog = new QuickAddDialog(mapping, _mappingError, root, folders)
         { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -1994,7 +1994,7 @@ public partial class MainWindow : Window
         App.Log.Info($"быстрое добавление: файлов {dialog.Plans.Count}");
         SetStatus("скрипты сохранены");
         if (dialog.CreatePullRequest)
-            await RunCreatePrAsync();
+            AutoPr_Click(AutoPrButton, new RoutedEventArgs());
     }
 
     private string? _mappingError;
@@ -2002,7 +2002,7 @@ public partial class MainWindow : Window
     private UseFolderMapping ReloadUseMapping(bool showError)
     {
         var root = App.Settings.Current.ProjectPath;
-        var mapping = UseFolderMappingFile.Load(root, out _mappingError);
+        var mapping = UseFolderMappingFile.Load(out _mappingError);
         if (_mappingError is not null)
         {
             App.Log.Error("mapping: " + _mappingError);
@@ -2043,13 +2043,31 @@ public partial class MainWindow : Window
             return;
 
         SetStatus("анализ USE…");
-        var report = UseFolderAnalyzer.Analyze(root);
+        var report = UseFolderAnalyzer.Analyze(root, UseFolderAnalyzer.ScriptRootFolder);
         var mapping = ReloadUseMapping(showError: false);
-        var dialog = new UseMappingReportDialog(root, report, mapping) { Owner = this };
+        var dialog = new UseMappingReportDialog(report, mapping) { Owner = this };
         dialog.ShowDialog();
         if (dialog.MappingChanged)
             ReloadUseMapping(showError: false);
         SetStatus("готов");
+    }
+
+    private IReadOnlyList<string> DiscoverScriptFolders(string root)
+    {
+        var scope = Path.Combine(root, UseFolderAnalyzer.ScriptRootFolder);
+        if (!Directory.Exists(scope))
+            return _discovery.DiscoverWorkFolders(root, maxDepth: 8);
+
+        var folders = new List<string> { UseFolderAnalyzer.ScriptRootFolder };
+        foreach (var folder in _discovery.DiscoverWorkFolders(scope, maxDepth: 8))
+        {
+            var relative = folder.Replace('\\', '/').Trim('/');
+            if (relative.Length == 0 || relative == ".")
+                continue;
+            folders.Add(UseFolderAnalyzer.ScriptRootFolder + "/" + relative);
+        }
+
+        return folders;
     }
 
     private async Task<bool> EnsureWorkBranchAsync()

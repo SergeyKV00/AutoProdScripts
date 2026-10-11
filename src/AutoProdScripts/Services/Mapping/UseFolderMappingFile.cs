@@ -5,12 +5,13 @@ namespace AutoProdScripts.Services.Mapping;
 
 public static class UseFolderMappingFile
 {
-    public static string GetPath(string projectRoot) =>
-        Path.Combine(projectRoot, "mapping", "use-folders.yaml");
+    public static string GetPath() =>
+        Path.Combine(AppContext.BaseDirectory, "mapping", "use-folders.yaml");
 
-    public static UseFolderMapping Load(string projectRoot, out string? error)
+    public static UseFolderMapping Load(out string? error) => LoadFrom(GetPath(), out error);
+
+    public static UseFolderMapping LoadFrom(string path, out string? error)
     {
-        var path = GetPath(projectRoot);
         var mapping = new UseFolderMapping { FilePath = path };
         error = null;
         if (!File.Exists(path))

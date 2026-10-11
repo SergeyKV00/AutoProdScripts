@@ -12,9 +12,19 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        EventManager.RegisterClassHandler(
+            typeof(Window),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(OnWindowLoaded));
         base.OnStartup(e);
         Settings.Load();
         _ = SqlHighlightingLoader.GetDefinition();
         Log.Info("Приложение запущено.");
+    }
+
+    private static void OnWindowLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Window window && ReferenceEquals(e.OriginalSource, window))
+            WindowTheme.Apply(window);
     }
 }

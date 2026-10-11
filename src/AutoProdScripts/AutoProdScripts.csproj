@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <!-- Allow restore/packaging metadata on non-Windows CI; runtime build requires Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <ApplicationIcon />
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>AutoProdScripts</AssemblyName>
     <RootNamespace>AutoProdScripts</RootNamespace>
     <Product>AutoProdScripts</Product>
@@ -24,6 +24,11 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\SqlMutedDark.xshd" />
+    <Resource Include="Assets\app.ico" />
+    <Content Include="mapping\use-folders.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

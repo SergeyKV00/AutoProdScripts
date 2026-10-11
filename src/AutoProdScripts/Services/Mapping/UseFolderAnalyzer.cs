@@ -10,15 +10,29 @@ public static class UseFolderAnalyzer
         ".git", ".vs", ".idea", "bin", "obj", "node_modules", "packages", ".nuget", "mapping"
     };
 
-    public static UseFolderReport Analyze(string projectRoot)
+    public const string ScriptRootFolder = "2026";
+
+    public static UseFolderReport Analyze(string projectRoot) =>
+        Analyze(projectRoot, ScriptRootFolder);
+
+    public static UseFolderReport Analyze(string projectRoot, string? scopeRelative)
     {
         var report = new UseFolderReport();
         if (string.IsNullOrWhiteSpace(projectRoot) || !Directory.Exists(projectRoot))
             return report;
 
+        var start = projectRoot;
+        if (!string.IsNullOrWhiteSpace(scopeRelative))
+        {
+            start = Path.GetFullPath(Path.Combine(projectRoot, scopeRelative));
+            var rootFull = Path.GetFullPath(projectRoot);
+            if (!start.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase) || !Directory.Exists(start))
+                return report;
+        }
+
         var byFolder = new Dictionary<string, FolderUseGroup>(StringComparer.OrdinalIgnoreCase);
         var byDatabase = new Dictionary<string, DatabaseFolderGroup>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in EnumerateSql(projectRoot))
+        foreach (var file in EnumerateSql(start))
         {
             var relative = Path.GetRelativePath(projectRoot, file).Replace('\\', '/');
             var folder = Path.GetDirectoryName(relative)?.Replace('\\', '/') ?? ".";

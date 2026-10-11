@@ -14,6 +14,9 @@
     <SolidColorBrush x:Key="FgInfoBrush" Color="#7EB6FF"/>
     <SolidColorBrush x:Key="AccentBrush" Color="#2F6FED"/>
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#4C82F6"/>
+    <SolidColorBrush x:Key="QuickAddBrush" Color="#F0A024"/>
+    <SolidColorBrush x:Key="QuickAddHoverBrush" Color="#FFB84A"/>
+    <SolidColorBrush x:Key="QuickAddTextBrush" Color="#1C1406"/>
     <SolidColorBrush x:Key="StatusBrush" Color="#0E1726"/>
     <SolidColorBrush x:Key="SelectionBrush" Color="#1D4E89"/>
     <SolidColorBrush x:Key="HoverBrush" Color="#1A3354"/>
@@ -67,6 +70,36 @@
     <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="{StaticResource InputBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+    </Style>
+
+    <Style x:Key="QuickAddButton" TargetType="Button">
+      <Setter Property="Padding" Value="10,4"/>
+      <Setter Property="Height" Value="36"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="Background" Value="{StaticResource QuickAddBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource QuickAddTextBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="3"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{StaticResource QuickAddHoverBrush}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="bd" Property="Opacity" Value="0.5"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
 
     <Style x:Key="IconButton" TargetType="Button">

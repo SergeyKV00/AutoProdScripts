@@ -4,6 +4,7 @@
         xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
         Title="AutoProdScripts"
         Height="720" Width="1200"
+        WindowState="Maximized"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgBrush}"
         Foreground="{StaticResource FgBrush}">
@@ -38,7 +39,6 @@
         <TextBlock Text="Файлы" VerticalAlignment="Center" Margin="4,0,6,0"
                    Foreground="{StaticResource FgMutedBrush}"/>
         <Button Content="📄 Новый скрипт" Click="NewScript_Click" Style="{StaticResource ToolbarButton}"/>
-        <Button Content="⚡ Быстрое добавление" Click="QuickAdd_Click" Style="{StaticResource ToolbarButton}"/>
         <Button Content="💾 Сохранить" Click="Save_Click" Style="{StaticResource ToolbarButton}"/>
         <Border Width="1" Margin="12,2" Background="{StaticResource BorderBrush}"/>
         <TextBlock Text="Git" VerticalAlignment="Center" Margin="4,0,6,0"
@@ -174,9 +174,18 @@
                       ResizeDirection="Rows" Background="{StaticResource BorderBrush}"/>
 
         <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
+          <Border DockPanel.Dock="Top" Padding="8,8,8,0">
+            <Button Click="QuickAdd_Click"
+                    Style="{StaticResource QuickAddButton}"
+                    HorizontalAlignment="Stretch"
+                    ToolTip="Вставить несколько SQL и разложить по папкам">
+              <TextBlock Text="⚡ Быстрое добавление" VerticalAlignment="Center"/>
+            </Button>
+          </Border>
           <Border DockPanel.Dock="Top" Padding="8,8,8,8"
                   BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
             <Button x:Name="AutoPrButton" Click="AutoPr_Click"
+                    Height="36" Margin="0" Padding="10,4"
                     HorizontalAlignment="Stretch" VerticalAlignment="Center"
                     ToolTip="Создать ветку, закоммитить скрипты и открыть PR по шаблону">
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">

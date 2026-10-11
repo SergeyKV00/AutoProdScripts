@@ -7,16 +7,14 @@ namespace AutoProdScripts.Views;
 
 public partial class UseMappingReportDialog : Window
 {
-    private readonly string _projectRoot;
     private readonly UseFolderReport _report;
     private UseFolderMapping _mapping;
 
     public bool MappingChanged { get; private set; }
 
-    public UseMappingReportDialog(string projectRoot, UseFolderReport report, UseFolderMapping mapping)
+    public UseMappingReportDialog(UseFolderReport report, UseFolderMapping mapping)
     {
         InitializeComponent();
-        _projectRoot = projectRoot;
         _report = report;
         _mapping = mapping;
         ReportBox.Text = UseFolderMappingFile.FormatReport(report);
@@ -26,7 +24,7 @@ public partial class UseMappingReportDialog : Window
     {
         var draft = new UseFolderMapping
         {
-            FilePath = Path.Combine(_projectRoot, "mapping", "use-folders.draft.yaml"),
+            FilePath = Path.Combine(Path.GetDirectoryName(_mapping.FilePath) ?? AppContext.BaseDirectory, "use-folders.draft.yaml"),
             OnMissingMapping = _mapping.OnMissingMapping
         };
         foreach (var folder in _report.UnambiguousFolders)

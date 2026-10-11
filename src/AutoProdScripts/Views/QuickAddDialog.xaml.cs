@@ -7,6 +7,8 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using AutoProdScripts.Models;
 using AutoProdScripts.Services.Mapping;
+using AutoProdScripts.Themes;
+using ICSharpCode.AvalonEdit.Highlighting;
 
 namespace AutoProdScripts.Views;
 
@@ -22,6 +24,7 @@ public partial class QuickAddDialog : Window
     private readonly List<QuickScriptRow> _rows = new();
     private readonly DispatcherTimer _parseTimer;
     private readonly Dictionary<Guid, TreeViewItem> _nodes = new();
+    private int _tempIndex;
     private bool _syncing;
     private bool _editing;
 
@@ -31,6 +34,9 @@ public partial class QuickAddDialog : Window
     public QuickAddDialog(UseFolderMapping mapping, string? mappingError, string projectRoot, IReadOnlyList<string> folders)
     {
         InitializeComponent();
+        SqlBox.SyntaxHighlighting = SqlHighlightingLoader.GetDefinition()
+                                    ?? HighlightingManager.Instance.GetDefinition("TSQL")
+                                    ?? HighlightingManager.Instance.GetDefinition("SQL");
         _mapping = mapping;
         _projectRoot = projectRoot;
         _folders = folders;
@@ -52,14 +58,24 @@ public partial class QuickAddDialog : Window
 
     private void AddRow()
     {
-        var row = new QuickScriptRow();
+        var row = new QuickScriptRow { TempName = NextTempName(), FileName = string.Empty };
+        row.FileName = row.TempName;
         Resolve(row);
         _rows.Add(row);
         ScriptList.Items.Add(row);
         ScriptList.SelectedItem = row;
         RebuildTree();
-        FileNameBox.Focus();
-        FileNameBox.Select(0, Math.Min(8, FileNameBox.Text.Length));
+        SqlBox.Focus();
+    }
+
+    private string NextTempName()
+    {
+        while (true)
+        {
+            var name = $"temp_{++_tempIndex}.sql";
+            if (_rows.All(row => !row.TempName.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                return name;
+        }
     }
 
     private void Remove_Click(object sender, RoutedEventArgs e)
@@ -91,22 +107,13 @@ public partial class QuickAddDialog : Window
         {
             if (ScriptList.SelectedItem is not QuickScriptRow row)
             {
-                FileNameBox.Text = string.Empty;
-                UseBox.Text = string.Empty;
                 SqlBox.Text = string.Empty;
-                StatusText.Text = string.Empty;
-                FileNameBox.IsEnabled = false;
                 SqlBox.IsEnabled = false;
                 return;
             }
 
-            FileNameBox.IsEnabled = true;
             SqlBox.IsEnabled = true;
-            FileNameBox.Text = row.FileName;
             SqlBox.Text = row.Sql;
-            UseBox.Text = string.IsNullOrWhiteSpace(row.UseName) ? "—" : row.UseName;
-            StatusText.Text = row.StatusText;
-            StatusText.Foreground = BrushFor(row.Status);
         }
         finally
         {
@@ -114,17 +121,7 @@ public partial class QuickAddDialog : Window
         }
     }
 
-    private void FileNameBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_editing || ScriptList.SelectedItem is not QuickScriptRow row)
-            return;
-        row.FileName = FileNameBox.Text;
-        Resolve(row);
-        RefreshCaptions();
-        RebuildTree();
-    }
-
-    private void SqlBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void SqlBox_TextChanged(object sender, EventArgs e)
     {
         if (_editing)
             return;
@@ -138,9 +135,6 @@ public partial class QuickAddDialog : Window
             return;
         row.Sql = SqlBox.Text;
         Resolve(row);
-        UseBox.Text = string.IsNullOrWhiteSpace(row.UseName) ? "—" : row.UseName;
-        StatusText.Text = row.StatusText;
-        StatusText.Foreground = BrushFor(row.Status);
         RefreshCaptions();
         RebuildTree();
     }
@@ -157,11 +151,9 @@ public partial class QuickAddDialog : Window
 
         if (string.IsNullOrWhiteSpace(row.UseName))
         {
-            row.Status = QuickScriptStatus.NoUse;
-            return;
+            row.Status = row.ManualFolder is null ? QuickScriptStatus.NoUse : QuickScriptStatus.Manual;
         }
-
-        if (_mapping.TryGetFolder(row.UseName, out var folder))
+        else if (_mapping.TryGetFolder(row.UseName, out var folder))
         {
             row.AutoFolder = folder;
             row.Status = row.ManualFolder is null ? QuickScriptStatus.Ok : QuickScriptStatus.Manual;
@@ -184,6 +176,51 @@ public partial class QuickAddDialog : Window
 
         if (row.Status is QuickScriptStatus.Ok or QuickScriptStatus.Manual && !FolderExists(row.EffectiveFolder))
             row.Status = QuickScriptStatus.MissingFolder;
+
+        ApplyFileName(row);
+    }
+
+    private void ApplyFileName(QuickScriptRow row)
+    {
+        var placed = row.EffectiveFolder is not null &&
+                     row.Status is QuickScriptStatus.Ok or QuickScriptStatus.Manual or QuickScriptStatus.MissingFolder;
+        if (!placed)
+        {
+            row.StampedFolder = null;
+            if (!row.NameLocked)
+                row.FileName = row.TempName;
+            return;
+        }
+
+        if (row.NameLocked)
+            return;
+        if (row.StampedFolder is not null &&
+            row.StampedFolder.Equals(row.EffectiveFolder, StringComparison.OrdinalIgnoreCase) &&
+            IsTimestampName(row.FileName))
+            return;
+
+        row.FileName = UniqueTimestamp(row);
+        row.StampedFolder = row.EffectiveFolder;
+    }
+
+    private string UniqueTimestamp(QuickScriptRow row)
+    {
+        var stamp = DateTime.Now.ToString("yyyyMMddHHmm");
+        var name = stamp + ".sql";
+        var index = 2;
+        while (_rows.Any(other => !ReferenceEquals(other, row) &&
+                                  string.Equals(other.EffectiveFolder, row.EffectiveFolder, StringComparison.OrdinalIgnoreCase) &&
+                                  other.FileName.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            name = $"{stamp}_{index++}.sql";
+        return name;
+    }
+
+    private static bool IsTimestampName(string name)
+    {
+        var file = Path.GetFileNameWithoutExtension(name);
+        var split = file.IndexOf('_');
+        var stamp = split < 0 ? file : file[..split];
+        return stamp.Length == 12 && stamp.All(char.IsDigit);
     }
 
     private bool FolderExists(string? folder)
@@ -204,8 +241,22 @@ public partial class QuickAddDialog : Window
 
     private void ChangeFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (ScriptList.SelectedItem is not QuickScriptRow row)
+        if (CurrentRow() is not QuickScriptRow row)
             return;
+        PickFolder(row);
+    }
+
+    private QuickScriptRow? CurrentRow()
+    {
+        if (ScriptList.SelectedItem is QuickScriptRow selected)
+            return selected;
+        if (TargetTree.SelectedItem is TreeViewItem { Tag: Guid id })
+            return _rows.FirstOrDefault(item => item.Id == id);
+        return null;
+    }
+
+    private void PickFolder(QuickScriptRow row)
+    {
         var dialog = new FolderPickDialog(_folders, row.EffectiveFolder) { Owner = this };
         if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.SelectedFolder))
             return;
@@ -214,6 +265,68 @@ public partial class QuickAddDialog : Window
         ShowSelected();
         RefreshCaptions();
         RebuildTree();
+    }
+
+    private void Rename_Click(QuickScriptRow row)
+    {
+        var name = PromptFileName(row.FileName);
+        if (name is null)
+            return;
+        if (!IsSafeFileName(name))
+        {
+            MessageBox.Show(this, "Имя файла не подходит.", "Быстрое добавление",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        row.FileName = EnsureSql(name);
+        row.NameLocked = true;
+        RefreshCaptions();
+        RebuildTree();
+    }
+
+    private string? PromptFileName(string current)
+    {
+        var box = new TextBox { Text = current, Margin = new Thickness(12, 12, 12, 0), MinWidth = 280 };
+        var withoutExt = Path.GetFileNameWithoutExtension(current);
+        box.Loaded += (_, _) =>
+        {
+            box.Focus();
+            box.Select(0, Math.Min(withoutExt.Length, box.Text.Length));
+        };
+        var ok = new Button { Content = "Ок", Width = 90, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button { Content = "Отмена", Width = 90, IsCancel = true, Style = (Style)FindResource("SecondaryButton") };
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12)
+        };
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+        var panel = new DockPanel();
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        panel.Children.Add(buttons);
+        panel.Children.Add(box);
+        var window = new Window
+        {
+            Title = "Имя файла",
+            Content = panel,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            Owner = this,
+            Background = Background,
+            Foreground = Foreground,
+            ShowInTaskbar = false
+        };
+        string? result = null;
+        ok.Click += (_, _) =>
+        {
+            result = box.Text.Trim();
+            window.DialogResult = true;
+        };
+        return window.ShowDialog() == true ? result : null;
     }
 
     private void ResetFolder_Click(object sender, RoutedEventArgs e)
@@ -249,7 +362,7 @@ public partial class QuickAddDialog : Window
         foreach (var row in _rows)
         {
             var folder = row.EffectiveFolder;
-            var parts = string.IsNullOrWhiteSpace(folder) || folder == "."
+            var parts = string.IsNullOrWhiteSpace(folder)
                 ? new[] { "без папки" }
                 : folder.Split('/', StringSplitOptions.RemoveEmptyEntries);
             var list = roots;
@@ -290,33 +403,54 @@ public partial class QuickAddDialog : Window
 
     private TreeViewItem CreateItem(TargetNode node)
     {
-        var label = new TextBlock
-        {
-            Text = node.Name,
-            Margin = new Thickness(6, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(new TextBlock
+        var header = new StackPanel { Orientation = Orientation.Horizontal };
+        header.Children.Add(new TextBlock
         {
             Text = node.IsFolder ? "📁" : "📄",
             VerticalAlignment = VerticalAlignment.Center
         });
-        row.Children.Add(label);
-        if (!node.IsFolder && node.Row is not null)
+        header.Children.Add(new TextBlock
         {
-            row.Children.Add(new TextBlock
+            Text = node.Name,
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        if (node.Row is QuickScriptRow script)
+        {
+            header.Children.Add(new TextBlock
             {
-                Text = node.Row.StatusText,
+                Text = script.StatusText,
                 Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = BrushFor(node.Row.Status)
+                Foreground = BrushFor(script.Status)
             });
+            var rename = new Button
+            {
+                Content = new System.Windows.Shapes.Path
+                {
+                    Width = 13,
+                    Height = 13,
+                    Stretch = Stretch.Uniform,
+                    Fill = (Brush)FindResource("FgBrush"),
+                    Data = Geometry.Parse("M3,17.25 L3,21 L6.75,21 L17.81,9.94 L14.06,6.19 Z M20.71,7.04 C21.1,6.65 21.1,6.02 20.71,5.63 L18.37,3.29 C17.98,2.9 17.35,2.9 16.96,3.29 L15.13,5.12 L18.88,8.87 Z")
+                },
+                Width = 26,
+                Height = 26,
+                Margin = new Thickness(6, 0, 0, 0),
+                Style = (Style)FindResource("IconButton"),
+                ToolTip = "Переименовать файл"
+            };
+            rename.Click += (_, e) =>
+            {
+                e.Handled = true;
+                Rename_Click(script);
+            };
+            header.Children.Add(rename);
         }
 
         var item = new TreeViewItem
         {
-            Header = row,
+            Header = header,
             IsExpanded = true,
             Tag = node.Row?.Id
         };
@@ -341,7 +475,7 @@ public partial class QuickAddDialog : Window
 
     private void Save_Click(object sender, RoutedEventArgs e) => Accept(createPr: false);
 
-    private void CreatePr_Click(object sender, RoutedEventArgs e) => Accept(createPr: true);
+    private void AutoPr_Click(object sender, RoutedEventArgs e) => Accept(createPr: true);
 
     private void Accept(bool createPr)
     {
@@ -356,7 +490,7 @@ public partial class QuickAddDialog : Window
         if (_rows.Count == 0 || problems.Count > 0)
         {
             MessageBox.Show(this,
-                "У каждого скрипта должны быть имя, USE и папка. Для строк без mapping выберите папку вручную.",
+                "У каждого скрипта должны быть имя и папка. Если USE нет или для него нет mapping, выберите папку вручную.",
                 "Быстрое добавление", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -430,7 +564,10 @@ public partial class QuickAddDialog : Window
     private sealed class QuickScriptRow
     {
         public Guid Id { get; } = Guid.NewGuid();
-        public string FileName { get; set; } = "FileName.sql";
+        public string TempName { get; set; } = "temp_1.sql";
+        public string FileName { get; set; } = "temp_1.sql";
+        public bool NameLocked { get; set; }
+        public string? StampedFolder { get; set; }
         public string Sql { get; set; } = string.Empty;
         public string? UseName { get; set; }
         public string? AutoFolder { get; set; }
@@ -447,7 +584,8 @@ public partial class QuickAddDialog : Window
             QuickScriptStatus.Skip => "пропуск",
             _ => "ошибка имени"
         };
-        public string Caption => $"{FileName} — {StatusText}";
+        public string Caption =>
+            string.IsNullOrWhiteSpace(EffectiveFolder) ? $"{FileName} — {StatusText}" : $"{FileName} — {EffectiveFolder}";
     }
 
     private enum QuickScriptStatus
