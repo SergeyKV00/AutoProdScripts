@@ -3,36 +3,37 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
-    <!-- Dark IDE theme — light foregrounds on dark surfaces (~WCAG-ish contrast) -->
-    <SolidColorBrush x:Key="BgBrush" Color="#1E1E1E"/>
-    <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
-    <SolidColorBrush x:Key="PanelAltBrush" Color="#2D2D30"/>
-    <SolidColorBrush x:Key="BorderBrush" Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="InputBrush" Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="FgBrush" Color="#D4D4D4"/>
-    <SolidColorBrush x:Key="FgMutedBrush" Color="#A0A0A0"/>
-    <SolidColorBrush x:Key="FgInfoBrush" Color="#8FB8D4"/>
-    <SolidColorBrush x:Key="AccentBrush" Color="#0E639C"/>
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#1177BB"/>
-    <SolidColorBrush x:Key="StatusBrush" Color="#007ACC"/>
-    <SolidColorBrush x:Key="SelectionBrush" Color="#264F78"/>
-    <SolidColorBrush x:Key="MenuPopupBrush" Color="#2D2D30"/>
+    <!-- Тёмно-синяя тема: редактор, панели и акцент как на макете -->
+    <SolidColorBrush x:Key="BgBrush" Color="#0B1626"/>
+    <SolidColorBrush x:Key="PanelBrush" Color="#101C2E"/>
+    <SolidColorBrush x:Key="PanelAltBrush" Color="#15263A"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="#24364C"/>
+    <SolidColorBrush x:Key="InputBrush" Color="#16283C"/>
+    <SolidColorBrush x:Key="FgBrush" Color="#D6E2F0"/>
+    <SolidColorBrush x:Key="FgMutedBrush" Color="#8EA0B8"/>
+    <SolidColorBrush x:Key="FgInfoBrush" Color="#7EB6FF"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#2F6FED"/>
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#4C82F6"/>
+    <SolidColorBrush x:Key="StatusBrush" Color="#0E1726"/>
+    <SolidColorBrush x:Key="SelectionBrush" Color="#1D4E89"/>
+    <SolidColorBrush x:Key="HoverBrush" Color="#1A3354"/>
+    <SolidColorBrush x:Key="MenuPopupBrush" Color="#15263A"/>
 
     <!-- Override system chrome used by Menu / ComboBox / TreeView defaults -->
-    <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#D4D4D4"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#D4D4D4"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.MenuTextBrushKey}" Color="#D4D4D4"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBrushKey}" Color="#2D2D30"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBarBrushKey}" Color="#252526"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.ControlLightBrushKey}" Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}" Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#1E1E1E"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#264F78"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#D6E2F0"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#D6E2F0"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuTextBrushKey}" Color="#D6E2F0"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBrushKey}" Color="#15263A"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBarBrushKey}" Color="#101C2E"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#16283C"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlLightBrushKey}" Color="#16283C"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}" Color="#16283C"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#0B1626"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#1D4E89"/>
     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#F0F0F0"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#3A3D41"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#D4D4D4"/>
-    <SolidColorBrush x:Key="{x:Static SystemColors.GrayTextBrushKey}" Color="#A0A0A0"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#1A3354"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#D6E2F0"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.GrayTextBrushKey}" Color="#8EA0B8"/>
 
     <Style TargetType="Button">
       <Setter Property="Padding" Value="10,4"/>
@@ -68,11 +69,68 @@
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
     </Style>
 
+    <Style x:Key="IconButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource FgInfoBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="2"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="11"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{StaticResource SelectionBrush}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentBrush}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="ToolbarButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
+      <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="Margin" Value="2,0"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="3"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{StaticResource SelectionBrush}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="bd" Property="Opacity" Value="0.5"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <Style TargetType="TextBox">
       <Setter Property="Padding" Value="6,4"/>
       <Setter Property="Background" Value="{StaticResource InputBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-      <Setter Property="BorderBrush" Value="#555555"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
       <Setter Property="CaretBrush" Value="#F0F0F0"/>
       <Setter Property="SelectionBrush" Value="{StaticResource SelectionBrush}"/>
     </Style>
@@ -81,7 +139,7 @@
       <Setter Property="Padding" Value="6,4"/>
       <Setter Property="Background" Value="{StaticResource InputBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-      <Setter Property="BorderBrush" Value="#555555"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
       <Setter Property="CaretBrush" Value="#F0F0F0"/>
       <Setter Property="SelectionBrush" Value="{StaticResource SelectionBrush}"/>
     </Style>
@@ -106,7 +164,7 @@
       <Setter Property="Padding" Value="6,4"/>
       <Setter Property="Background" Value="{StaticResource InputBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-      <Setter Property="BorderBrush" Value="#555555"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
       <Setter Property="SnapsToDevicePixels" Value="True"/>
       <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
       <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
@@ -116,7 +174,7 @@
             <Grid>
               <Border x:Name="Bd"
                       Background="{StaticResource InputBrush}"
-                      BorderBrush="#555555"
+                      BorderBrush="{StaticResource BorderBrush}"
                       BorderThickness="1"
                       CornerRadius="3"/>
               <ToggleButton x:Name="ToggleButton"
@@ -146,7 +204,7 @@
                      IsOpen="{TemplateBinding IsDropDownOpen}"
                      PopupAnimation="Fade">
                 <Border Background="{StaticResource PanelAltBrush}"
-                        BorderBrush="#555555"
+                        BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
                         MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                         MaxHeight="{TemplateBinding MaxDropDownHeight}">
@@ -205,7 +263,7 @@
     <Style x:Key="BranchPickerButton" TargetType="ToggleButton">
       <Setter Property="Background" Value="{StaticResource InputBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-      <Setter Property="BorderBrush" Value="#555555"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
       <Setter Property="Padding" Value="8,6"/>
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -247,35 +305,78 @@
     </Style>
 
     <Style TargetType="MenuItem">
+      <Setter Property="OverridesDefaultStyle" Value="True"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
       <Setter Property="Background" Value="Transparent"/>
-      <Style.Triggers>
-        <Trigger Property="Role" Value="TopLevelHeader">
-          <Setter Property="Background" Value="Transparent"/>
-          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-        </Trigger>
-        <Trigger Property="Role" Value="TopLevelItem">
-          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-        </Trigger>
-        <Trigger Property="Role" Value="SubmenuHeader">
-          <Setter Property="Background" Value="{StaticResource MenuPopupBrush}"/>
-          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-        </Trigger>
-        <Trigger Property="Role" Value="SubmenuItem">
-          <Setter Property="Background" Value="{StaticResource MenuPopupBrush}"/>
-          <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-        </Trigger>
-        <Trigger Property="IsHighlighted" Value="True">
-          <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
-          <Setter Property="Foreground" Value="#F0F0F0"/>
-        </Trigger>
-      </Style.Triggers>
+      <Setter Property="Padding" Value="14,7"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="MenuItem">
+            <Grid>
+              <Border x:Name="Bd"
+                      Background="{TemplateBinding Background}"
+                      Padding="{TemplateBinding Padding}"
+                      CornerRadius="3">
+                <ContentPresenter ContentSource="Header"
+                                  RecognizesAccessKey="True"
+                                  VerticalAlignment="Center"/>
+              </Border>
+              <Popup x:Name="PART_Popup"
+                     Placement="Right"
+                     AllowsTransparency="True"
+                     Focusable="False"
+                     IsOpen="{TemplateBinding IsSubmenuOpen}"
+                     PopupAnimation="Fade">
+                <Border Background="{StaticResource MenuPopupBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        Padding="4">
+                  <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                </Border>
+              </Popup>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="Role" Value="TopLevelHeader">
+                <Setter Property="Padding" Value="10,6"/>
+                <Setter TargetName="PART_Popup" Property="Placement" Value="Bottom"/>
+                <Setter TargetName="PART_Popup" Property="HorizontalOffset" Value="0"/>
+              </Trigger>
+              <Trigger Property="Role" Value="TopLevelItem">
+                <Setter Property="Padding" Value="10,6"/>
+              </Trigger>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource SelectionBrush}"/>
+                <Setter Property="Foreground" Value="#F0F0F0"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
 
     <Style TargetType="ContextMenu">
+      <Setter Property="OverridesDefaultStyle" Value="True"/>
       <Setter Property="Background" Value="{StaticResource MenuPopupBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
       <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+      <Setter Property="Padding" Value="4"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ContextMenu">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True">
+              <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
 
     <Style TargetType="ToolBar">
@@ -302,12 +403,12 @@
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
       <Setter Property="Padding" Value="2,1"/>
       <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
+        </Trigger>
         <Trigger Property="IsSelected" Value="True">
           <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
           <Setter Property="Foreground" Value="#F0F0F0"/>
-        </Trigger>
-        <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="#2A2D2E"/>
         </Trigger>
       </Style.Triggers>
     </Style>
@@ -322,12 +423,12 @@
       <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
       <Setter Property="Padding" Value="6,3"/>
       <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
+        </Trigger>
         <Trigger Property="IsSelected" Value="True">
           <Setter Property="Background" Value="{StaticResource SelectionBrush}"/>
           <Setter Property="Foreground" Value="#F0F0F0"/>
-        </Trigger>
-        <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="#2A2D2E"/>
         </Trigger>
       </Style.Triggers>
     </Style>
@@ -363,15 +464,15 @@
         <Setter.Value>
           <ControlTemplate TargetType="Thumb">
             <Border x:Name="ThumbBorder"
-                    Background="#5A5A5A"
+                    Background="#3D5570"
                     CornerRadius="3"
                     Margin="1"/>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="ThumbBorder" Property="Background" Value="#7A7A7A"/>
+                <Setter TargetName="ThumbBorder" Property="Background" Value="#5A7390"/>
               </Trigger>
               <Trigger Property="IsDragging" Value="True">
-                <Setter TargetName="ThumbBorder" Property="Background" Value="#8FB8D4"/>
+                <Setter TargetName="ThumbBorder" Property="Background" Value="#7EB6FF"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>

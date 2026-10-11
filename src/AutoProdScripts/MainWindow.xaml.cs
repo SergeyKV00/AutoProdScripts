@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using AutoProdScripts.Models;
@@ -34,6 +36,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        BranchPopup.CustomPopupPlacementCallback = PlaceBranchPopupAbove;
         App.Log.Entries.CollectionChanged += (_, _) => RenderLog();
         RenderLog();
         SqlEditor.SyntaxHighlighting = SqlHighlightingLoader.GetDefinition()
@@ -43,6 +46,12 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await OnLoadedAsync();
         PreviewKeyDown += MainWindow_PreviewKeyDown;
     }
+
+    private static CustomPopupPlacement[] PlaceBranchPopupAbove(Size popupSize, Size targetSize, Point offset) =>
+        new[]
+        {
+            new CustomPopupPlacement(new Point(0, -popupSize.Height - 4), PopupPrimaryAxis.None)
+        };
 
     private void SqlEditor_TextChanged(object? sender, EventArgs e)
     {
@@ -141,6 +150,13 @@ public partial class MainWindow : Window
 
     private static readonly Brush FolderIconBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xD7, 0xBA, 0x7D)));
     private static readonly Brush FileIconBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x8F, 0xB8, 0xD4)));
+    private static readonly Brush StatusOkBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x3D, 0xDC, 0x97)));
+    private static readonly Brush StatusBusyBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7E, 0xB6, 0xFF)));
+    private static readonly Brush StatusWarnBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xF5, 0xC4, 0x51)));
+    private static readonly Brush StatusErrorBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B)));
+    private static readonly Geometry UndoIconData = Freeze(Geometry.Parse(
+        "M12.5,8 C9.85,8 7.45,8.99 5.6,10.6 L2,7 V16 H11 L7.38,12.38 C8.77,11.22 10.54,10.5 12.5,10.5 C16.04,10.5 19.05,12.81 20.1,16 L22.47,15.22 C21.08,11.03 17.15,8 12.5,8 Z"));
+    private string? _renderedLogKey;
 
     private static TreeViewItem CreateTreeItem(FileSystemNode node)
     {
@@ -226,8 +242,9 @@ public partial class MainWindow : Window
 
         _branchRefs = (await _git.ListBranchRefsAsync()).ToList();
         BranchButtonText.Text = string.IsNullOrWhiteSpace(_currentBranch) ? "—" : _currentBranch;
+        BuildBranchTree();
         if (BranchPopup.IsOpen)
-            RebuildBranchTree();
+            ApplyBranchFilter();
     }
 
     private void SwitchBranch_Click(object sender, RoutedEventArgs e)
@@ -243,30 +260,25 @@ public partial class MainWindow : Window
         _branchUiLock = true;
         BranchSearchBox.Text = string.Empty;
         _branchUiLock = false;
-        RebuildBranchTree();
+        ApplyBranchFilter();
         BranchSearchBox.Focus();
+        BranchSearchBox.SelectAll();
     }
 
     private void BranchSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_branchUiLock)
             return;
-        RebuildBranchTree();
+        ApplyBranchFilter();
     }
 
-    private void RebuildBranchTree()
+    private void BuildBranchTree()
     {
-        var query = (BranchSearchBox.Text ?? string.Empty).Trim();
-        var matches = _branchRefs.Where(branch =>
-            string.IsNullOrEmpty(query) ||
-            branch.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
-
-        var local = matches
+        var local = _branchRefs
             .Where(branch => branch.Remote is null)
-            .OrderByDescending(branch => branch.IsCurrent)
-            .ThenBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var remotes = matches
+        var remotes = _branchRefs
             .Where(branch => branch.Remote is not null)
             .GroupBy(branch => branch.Remote!, StringComparer.OrdinalIgnoreCase)
             .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase);
@@ -275,18 +287,16 @@ public partial class MainWindow : Window
         try
         {
             BranchTree.Items.Clear();
-            AddBranchFolder("Стянутые", local, expand: !string.IsNullOrEmpty(query) || local.Any(branch => branch.IsCurrent));
+            AddBranchFolder("Стянутые", local);
             foreach (var group in remotes)
             {
                 AddBranchFolder(
                     "remote/" + group.Key,
-                    group.OrderBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase).ToList(),
-                    expand: !string.IsNullOrEmpty(query));
+                    group.OrderBy(branch => branch.Name, StringComparer.OrdinalIgnoreCase).ToList());
             }
 
-            var any = BranchTree.Items.Count > 0;
-            BranchEmptyText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
-            BranchTree.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            BranchTree.Visibility = BranchTree.Items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            ApplyBranchFilter();
         }
         finally
         {
@@ -294,35 +304,138 @@ public partial class MainWindow : Window
         }
     }
 
-    private void AddBranchFolder(string title, IReadOnlyList<GitBranchRef> branches, bool expand)
+    private void AddBranchFolder(string title, IReadOnlyList<GitBranchRef> branches)
     {
         if (branches.Count == 0)
             return;
 
-        var folder = new TreeViewItem
+        var folder = CreateBranchFolderItem(title, info: true);
+        foreach (var branch in branches)
+            InsertBranch(folder, branch);
+        BranchTree.Items.Add(folder);
+    }
+
+    private void InsertBranch(TreeViewItem root, GitBranchRef branch)
+    {
+        var parts = branch.Name.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            return;
+
+        var parent = root;
+        for (var i = 0; i < parts.Length - 1; i++)
+            parent = FindOrAddBranchFolder(parent, parts[i]);
+
+        var leafName = parts[^1];
+        parent.Items.Add(new TreeViewItem
         {
-            IsExpanded = expand,
             Header = new TextBlock
             {
-                Text = title,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("FgInfoBrush")
-            }
-        };
-        foreach (var branch in branches)
+                Text = branch.IsCurrent ? leafName + "  · текущая" : leafName,
+                Foreground = (Brush)FindResource(branch.IsCurrent ? "FgInfoBrush" : "FgBrush")
+            },
+            Tag = branch
+        });
+    }
+
+    private TreeViewItem FindOrAddBranchFolder(TreeViewItem parent, string name)
+    {
+        foreach (TreeViewItem child in parent.Items)
         {
-            folder.Items.Add(new TreeViewItem
-            {
-                Header = new TextBlock
-                {
-                    Text = branch.IsCurrent ? branch.Name + "  · текущая" : branch.Name,
-                    Foreground = (Brush)FindResource(branch.IsCurrent ? "FgInfoBrush" : "FgBrush")
-                },
-                Tag = branch
-            });
+            if (child.Tag is null && ItemTitle(child).Equals(name, StringComparison.OrdinalIgnoreCase))
+                return child;
         }
 
-        BranchTree.Items.Add(folder);
+        var folder = CreateBranchFolderItem(name, info: false);
+        parent.Items.Add(folder);
+        return folder;
+    }
+
+    private TreeViewItem CreateBranchFolderItem(string title, bool info) => new()
+    {
+        IsExpanded = false,
+        Header = new TextBlock
+        {
+            Text = title,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource(info ? "FgInfoBrush" : "FgBrush")
+        }
+    };
+
+    private static string ItemTitle(TreeViewItem item) =>
+        item.Header is TextBlock text ? text.Text : string.Empty;
+
+    private void ApplyBranchFilter()
+    {
+        var query = (BranchSearchBox.Text ?? string.Empty).Trim();
+        if (BranchTree.Items.Count == 0)
+        {
+            BranchEmptyText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        if (string.IsNullOrEmpty(query))
+        {
+            foreach (TreeViewItem item in BranchTree.Items)
+                ShowBranchItem(item);
+            foreach (TreeViewItem item in BranchTree.Items)
+                ExpandToCurrent(item);
+            BranchEmptyText.Visibility = Visibility.Collapsed;
+            BranchTree.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var any = false;
+        foreach (TreeViewItem item in BranchTree.Items)
+            any |= FilterBranchItem(item, query);
+        BranchEmptyText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        BranchTree.Visibility = Visibility.Visible;
+    }
+
+    private bool FilterBranchItem(TreeViewItem item, string query)
+    {
+        if (item.Tag is GitBranchRef branch)
+        {
+            var path = branch.Remote is null ? branch.Name : branch.Remote + "/" + branch.Name;
+            var match = path.Contains(query, StringComparison.OrdinalIgnoreCase);
+            item.Visibility = match ? Visibility.Visible : Visibility.Collapsed;
+            return match;
+        }
+
+        var titleMatch = ItemTitle(item).Contains(query, StringComparison.OrdinalIgnoreCase);
+        var childMatch = false;
+        foreach (TreeViewItem child in item.Items)
+            childMatch |= FilterBranchItem(child, query);
+
+        if (titleMatch && !childMatch)
+        {
+            ShowBranchItem(item);
+            item.IsExpanded = true;
+            return true;
+        }
+
+        item.Visibility = childMatch ? Visibility.Visible : Visibility.Collapsed;
+        item.IsExpanded = childMatch;
+        return childMatch;
+    }
+
+    private static void ShowBranchItem(TreeViewItem item)
+    {
+        item.Visibility = Visibility.Visible;
+        item.IsExpanded = false;
+        foreach (TreeViewItem child in item.Items)
+            ShowBranchItem(child);
+    }
+
+    private static bool ExpandToCurrent(TreeViewItem item)
+    {
+        if (item.Tag is GitBranchRef branch)
+            return branch.IsCurrent;
+
+        var found = false;
+        foreach (TreeViewItem child in item.Items)
+            found |= ExpandToCurrent(child);
+        item.IsExpanded = found;
+        return found;
     }
 
     private async void BranchTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -395,16 +508,88 @@ public partial class MainWindow : Window
             ChangesTree.Items.Add(CreateChangeItem(node));
     }
 
-    private void SetStatus(string text) => StatusText.Text = text;
+    private void SetStatus(string text)
+    {
+        var shown = string.IsNullOrWhiteSpace(text) ? "Готов" : char.ToUpper(text[0]) + text[1..];
+        StatusText.Text = shown;
+        var brush = StatusBrushFor(text);
+        StatusDot.Fill = brush;
+        StatusText.Foreground = brush;
+    }
+
+    private static Brush StatusBrushFor(string text)
+    {
+        if (text.Contains("ошиб", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("не удалось", StringComparison.OrdinalIgnoreCase))
+            return StatusErrorBrush;
+        if (text.Contains('…') || text.Contains("...", StringComparison.Ordinal))
+            return StatusBusyBrush;
+        if (text.Contains("не найден", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("не настроен", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("не поддерж", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("отменено", StringComparison.OrdinalIgnoreCase))
+            return StatusWarnBrush;
+        return StatusOkBrush;
+    }
 
     private void RenderLog()
     {
-        var text = string.Join(Environment.NewLine, App.Log.Entries);
-        if (LogBox.Text == text)
+        var key = App.Log.Entries.Count == 0
+            ? string.Empty
+            : App.Log.Entries.Count + "|" + App.Log.Entries[0];
+        if (key == _renderedLogKey)
             return;
 
-        LogBox.Text = text;
+        _renderedLogKey = key;
+        var document = new FlowDocument
+        {
+            PagePadding = new Thickness(8, 4, 8, 4),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12,
+            Background = LogBox.Background
+        };
+        foreach (var line in App.Log.Entries)
+            document.Blocks.Add(CreateLogParagraph(line));
+
+        LogBox.Document = document;
         LogBox.ScrollToHome();
+    }
+
+    private static Paragraph CreateLogParagraph(string line)
+    {
+        var time = line;
+        var level = "INFO";
+        var message = string.Empty;
+        var open = line.IndexOf('[');
+        var close = open >= 0 ? line.IndexOf(']', open + 1) : -1;
+        if (open > 0 && close > open)
+        {
+            time = line[..open].Trim();
+            level = line[(open + 1)..close];
+            message = line[(close + 1)..].TrimStart();
+        }
+
+        var levelBrush = level.ToUpperInvariant() switch
+        {
+            "ERROR" => StatusErrorBrush,
+            "WARN" => StatusWarnBrush,
+            _ => StatusBusyBrush
+        };
+        var paragraph = new Paragraph { Margin = new Thickness(0, 2, 0, 2) };
+        paragraph.Inlines.Add(new Run(time + "   ")
+        {
+            Foreground = (Brush)Application.Current.FindResource("FgMutedBrush")
+        });
+        paragraph.Inlines.Add(new Run(level.ToUpperInvariant())
+        {
+            Foreground = levelBrush,
+            FontWeight = FontWeights.Bold
+        });
+        paragraph.Inlines.Add(new Run("    " + message)
+        {
+            Foreground = (Brush)Application.Current.FindResource("FgBrush")
+        });
+        return paragraph;
     }
 
     private async void Sync_Click(object sender, RoutedEventArgs e)
@@ -479,7 +664,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             return;
 
-        var folders = _discovery.DiscoverWorkFolders(root);
+        var folders = _discovery.DiscoverWorkFolders(root, maxDepth: 8);
         var dlg = new NewScriptDialog(root, folders, _selectedFolderRel) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.CreatedFilePath is null)
             return;
@@ -523,8 +708,10 @@ public partial class MainWindow : Window
             return;
 
         e.Handled = true;
-        DeleteSelectedTreeFile();
+        DeleteSelectedTreeNode();
     }
+
+    private void DeleteFromTree_Click(object sender, RoutedEventArgs e) => DeleteSelectedTreeNode();
 
     private void ProjectTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -548,8 +735,59 @@ public partial class MainWindow : Window
                     : Path.GetDirectoryName(node.FullPath);
         }
 
-        e.Handled = true;
-        ShowAddScriptDialog();
+    }
+
+    private void CreateFileFromTree_Click(object sender, RoutedEventArgs e) => ShowAddScriptDialog();
+
+    private void CreateFolderFromTree_Click(object sender, RoutedEventArgs e)
+    {
+        var root = App.Settings.Current.ProjectPath;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return;
+
+        if (string.IsNullOrWhiteSpace(_contextFolderFullPath) || !Directory.Exists(_contextFolderFullPath))
+            _contextFolderFullPath = root;
+
+        var relative = Path.GetRelativePath(root, _contextFolderFullPath).Replace('\\', '/');
+        var caption = relative == "." ? "Папка: корень проекта" : $"Папка: {relative}";
+        var dlg = new NewFolderDialog(caption) { Owner = this };
+        if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.FolderName))
+            return;
+
+        var name = dlg.FolderName.Trim();
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            name.Contains(Path.DirectorySeparatorChar) ||
+            name.Contains(Path.AltDirectorySeparatorChar) ||
+            name is "." or "..")
+        {
+            MessageBox.Show(this, "Имя папки содержит недопустимые символы.", "Новая папка",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var fullPath = Path.Combine(_contextFolderFullPath, name);
+        if (Directory.Exists(fullPath) || File.Exists(fullPath))
+        {
+            MessageBox.Show(this, "Такая папка или файл уже есть.", "Новая папка",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(fullPath);
+        }
+        catch (Exception ex)
+        {
+            App.Log.Error($"не удалось создать папку: {ex.Message}");
+            MessageBox.Show(this, ex.Message, "Новая папка", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        App.Log.Info($"папка создана: {fullPath}");
+        RefreshTree();
+        RevealInTree(fullPath);
+        SetStatus($"создана папка: {name}");
     }
 
     private void ShowAddScriptDialog()
@@ -570,43 +808,73 @@ public partial class MainWindow : Window
         CreateScriptInContextFolder(dlg.ChosenFileName);
     }
 
-    private void DeleteSelectedTreeFile()
+    private void DeleteSelectedTreeNode()
     {
         if (ProjectTree.SelectedItem is not TreeViewItem { Tag: FileSystemNode node })
             return;
 
-        if (node.IsDirectory)
-        {
-            SetStatus("удаление папки не поддерживается");
+        var root = App.Settings.Current.ProjectPath;
+        if (!string.IsNullOrWhiteSpace(root) &&
+            string.Equals(Path.GetFullPath(node.FullPath), Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
             return;
-        }
 
-        var answer = MessageBox.Show(this, $"Удалить файл «{node.Name}»?", "Удаление",
+        var prompt = node.IsDirectory
+            ? $"Удалить папку «{node.Name}» и всё, что внутри?"
+            : $"Удалить файл «{node.Name}»?";
+        var answer = MessageBox.Show(this, prompt, "Удаление",
             MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes)
             return;
 
+        var toClose = _documents.Where(doc => IsInside(node.FullPath, doc.FullPath)).ToList();
+        if (!CloseDocumentsForDelete(toClose))
+            return;
+
         try
         {
-            if (File.Exists(node.FullPath))
+            if (node.IsDirectory)
+            {
+                if (Directory.Exists(node.FullPath))
+                    Directory.Delete(node.FullPath, recursive: true);
+            }
+            else if (File.Exists(node.FullPath))
+            {
                 File.Delete(node.FullPath);
+            }
         }
         catch (Exception ex)
         {
-            App.Log.Error($"не удалось удалить файл: {ex.Message}");
+            App.Log.Error($"не удалось удалить: {ex.Message}");
             MessageBox.Show(this, ex.Message, "Удаление", MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
 
-        var open = _documents.FirstOrDefault(d =>
-            string.Equals(d.FullPath, node.FullPath, StringComparison.OrdinalIgnoreCase));
-        if (open is not null)
-            CloseDocument(open, promptIfDirty: false);
-
-        App.Log.Info($"файл удалён: {node.FullPath}");
+        App.Log.Info(node.IsDirectory ? $"папка удалена: {node.FullPath}" : $"файл удалён: {node.FullPath}");
         RefreshTree();
         _ = RefreshChangesAsync();
-        SetStatus($"удалён: {node.Name}");
+        SetStatus(node.IsDirectory ? $"удалена папка: {node.Name}" : $"удалён: {node.Name}");
+    }
+
+    private bool CloseDocumentsForDelete(IReadOnlyList<OpenDocument> docs)
+    {
+        foreach (var doc in docs)
+        {
+            if (!_documents.Contains(doc))
+                continue;
+            CloseDocument(doc);
+            if (_documents.Contains(doc))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsInside(string folder, string path)
+    {
+        var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var full = Path.GetFullPath(path);
+        return full.Equals(root, StringComparison.OrdinalIgnoreCase)
+            || full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     private void CreateScriptInContextFolder(string fileName)
@@ -777,38 +1045,80 @@ public partial class MainWindow : Window
         {
             Header = CreateChangeHeader(node),
             Tag = node,
-            IsExpanded = true
+            IsExpanded = true,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
         foreach (var child in node.Children)
             item.Items.Add(CreateChangeItem(child));
         return item;
     }
 
-    private static FrameworkElement CreateChangeHeader(ChangeNode node)
+    private FrameworkElement CreateChangeHeader(ChangeNode node)
     {
         var icon = node.IsDirectory ? CreateFolderIcon() : CreateFileIcon();
         var label = new TextBlock
         {
             Text = node.Name,
             Margin = new Thickness(6, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var row = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(icon, 0);
+        Grid.SetColumn(label, 1);
         row.Children.Add(icon);
         row.Children.Add(label);
         if (!node.IsDirectory && node.Entry is not null)
         {
             var kind = GitStatusFormat.KindOf(node.Entry.Status);
-            row.Children.Add(new TextBlock
+            var kindText = new TextBlock
             {
                 Text = GitStatusFormat.Label(kind),
                 Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = BrushForKind(kind)
-            });
+            };
+            Grid.SetColumn(kindText, 2);
+            row.Children.Add(kindText);
         }
 
+        var revert = CreateRevertButton(node);
+        Grid.SetColumn(revert, 3);
+        row.Children.Add(revert);
         return row;
+    }
+
+    private Button CreateRevertButton(ChangeNode node)
+    {
+        var icon = new System.Windows.Shapes.Path
+        {
+            Data = UndoIconData,
+            Fill = StatusBusyBrush,
+            Stretch = Stretch.Uniform,
+            Width = 14,
+            Height = 14,
+            IsHitTestVisible = false
+        };
+        var button = new Button
+        {
+            Content = icon,
+            Width = 22,
+            Height = 22,
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Отменить изменения",
+            Style = (Style)FindResource("IconButton")
+        };
+        button.Click += async (_, args) =>
+        {
+            args.Handled = true;
+            await RevertNodeAsync(node);
+        };
+        return button;
     }
 
     private static Brush BrushForKind(GitChangeKind kind) => kind switch
@@ -833,27 +1143,9 @@ public partial class MainWindow : Window
             OpenFile(fullPath);
     }
 
-    private void ChangesTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        var item = FindAncestor<TreeViewItem>(e.OriginalSource as DependencyObject);
-        if (item is null)
-            return;
-
-        item.IsSelected = true;
-        item.Focus();
-    }
-
-    private void ChangesTree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
-    {
-        if (ChangesTree.SelectedItem is not TreeViewItem { Tag: ChangeNode })
-            e.Handled = true;
-    }
-
-    private async void RevertChange_Click(object sender, RoutedEventArgs e)
+    private async Task RevertNodeAsync(ChangeNode node)
     {
         if (_git is null)
-            return;
-        if (ChangesTree.SelectedItem is not TreeViewItem { Tag: ChangeNode node })
             return;
 
         var files = node.EnumerateFiles().ToList();
@@ -1160,6 +1452,38 @@ public partial class MainWindow : Window
             CloseDocument(doc);
         };
 
+        var closeAll = new MenuItem { Header = "Закрыть все" };
+        var closeLeft = new MenuItem { Header = "Закрыть слева" };
+        var closeRight = new MenuItem { Header = "Закрыть справа" };
+        closeAll.Click += (_, _) => CloseDocuments(_documents.ToList());
+        closeLeft.Click += (_, _) =>
+        {
+            var index = _documents.IndexOf(doc);
+            if (index > 0)
+                CloseDocuments(_documents.Take(index).ToList());
+        };
+        closeRight.Click += (_, _) =>
+        {
+            var index = _documents.IndexOf(doc);
+            if (index >= 0 && index < _documents.Count - 1)
+                CloseDocuments(_documents.Skip(index + 1).ToList());
+        };
+        var menu = new ContextMenu();
+        menu.Items.Add(new MenuItem { Header = "Закрыть", CommandParameter = doc });
+        ((MenuItem)menu.Items[0]).Click += (_, _) => CloseDocument(doc);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(closeLeft);
+        menu.Items.Add(closeRight);
+        menu.Items.Add(closeAll);
+        menu.Opened += (_, _) =>
+        {
+            var index = _documents.IndexOf(doc);
+            closeLeft.IsEnabled = index > 0;
+            closeRight.IsEnabled = index >= 0 && index < _documents.Count - 1;
+            closeAll.IsEnabled = _documents.Count > 0;
+        };
+        tab.ContextMenu = menu;
+
         doc.Tab = tab;
         doc.TitleText = title;
         doc.DirtyMark = dirty;
@@ -1208,6 +1532,19 @@ public partial class MainWindow : Window
 
         UpdateEmptyTabsHint();
         RefreshTabChrome();
+    }
+
+    private void CloseDocuments(IReadOnlyList<OpenDocument> docs)
+    {
+        foreach (var doc in docs)
+        {
+            if (!_documents.Contains(doc))
+                continue;
+            var count = _documents.Count;
+            CloseDocument(doc);
+            if (_documents.Count == count)
+                return;
+        }
     }
 
     private void UpdateEmptyTabsHint() =>

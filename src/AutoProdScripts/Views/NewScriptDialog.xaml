@@ -1,28 +1,29 @@
 <Window x:Class="AutoProdScripts.Views.NewScriptDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Новый SQL-скрипт"
-        Height="280" Width="480"
+        Title="Новый скрипт"
+        Width="480"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
         Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}"
-        ResizeMode="NoResize">
+        Foreground="{StaticResource FgBrush}">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <Button Content="Отмена" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Width="100"/>
-      <Button Content="Создать и открыть" Click="Create_Click" Width="150" Margin="8,0,0,0"/>
+      <Button x:Name="AutoButton" Content="Авто" MinWidth="90" Click="Auto_Click"/>
+      <Button Content="Ок" MinWidth="90" Margin="8,0,0,0" IsDefault="True" Click="Ok_Click"/>
+      <Button Content="Отмена" MinWidth="90" Margin="8,0,0,0" IsCancel="True"
+              Style="{StaticResource SecondaryButton}" Click="Cancel_Click"/>
     </StackPanel>
     <StackPanel>
       <Label Content="Папка"/>
-      <ComboBox x:Name="FolderBox" IsEditable="True"/>
+      <TextBox x:Name="FolderSearch" ToolTip="Поиск папки" TextChanged="FolderSearch_TextChanged"/>
+      <ListBox x:Name="FolderList" Height="180" Margin="0,6,0,0"
+               DisplayMemberPath="Label"/>
       <Label Content="Имя файла" Margin="0,12,0,0"/>
-      <TextBox x:Name="FileNameBox" Text="fix_.sql"/>
-      <Label Content="Шаблон" Margin="0,12,0,0"/>
-      <ComboBox x:Name="TemplateBox" SelectedIndex="0">
-        <ComboBoxItem Content="Пустой"/>
-        <ComboBoxItem Content="Header (author / date)"/>
-        <ComboBoxItem Content="BEGIN TRAN / COMMIT"/>
-      </ComboBox>
+      <TextBox x:Name="FileNameBox" Text="FileName.sql"/>
+      <TextBlock x:Name="AutoHint" Margin="0,10,0,0" TextWrapping="Wrap"
+                 Foreground="{StaticResource FgInfoBrush}"/>
     </StackPanel>
   </DockPanel>
 </Window>

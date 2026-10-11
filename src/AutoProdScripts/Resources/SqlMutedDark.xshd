@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <SyntaxDefinition name="SQL-Muted" extensions=".sql" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
-	<!-- Muted dark-IDE palette: soft blues/greens/grays, low saturation -->
-	<Color name="Comment" foreground="#6E7F6A" exampleText="-- comment" />
-	<Color name="Char" foreground="#97B09C" exampleText="name = 'abc'"/>
-	<Color name="String" foreground="#97B09C" exampleText="'text'"/>
-	<Color name="Keywords" foreground="#81A1C1" exampleText="SELECT FROM"/>
-	<Color name="Numbers" foreground="#B4A08E" exampleText="42"/>
-	<Color name="Punctuation" foreground="#8B949E" exampleText=";"/>
+	<!-- Navy editor: keywords in the same blue as the UI accent, still easy to read -->
+	<Color name="Comment" foreground="#6D7C8A" exampleText="-- comment" />
+	<Color name="Char" foreground="#8FCBB0" exampleText="name = 'abc'"/>
+	<Color name="String" foreground="#8FCBB0" exampleText="'text'"/>
+	<Color name="Keywords" foreground="#6CB6FF" exampleText="SELECT FROM"/>
+	<Color name="Numbers" foreground="#D4B483" exampleText="42"/>
+	<Color name="Punctuation" foreground="#9AADC2" exampleText=";"/>
 
 	<Property name="DocCommentMarker" value="///" />
 

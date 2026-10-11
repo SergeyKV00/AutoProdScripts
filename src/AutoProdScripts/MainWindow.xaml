@@ -15,9 +15,6 @@
         <Separator/>
         <MenuItem Header="Выход" Click="Exit_Click"/>
       </MenuItem>
-      <MenuItem Header="Правка">
-        <MenuItem Header="Найти…" IsEnabled="False"/>
-      </MenuItem>
       <MenuItem Header="Git">
         <MenuItem Header="Sync" Click="Sync_Click"/>
         <MenuItem Header="Новая ветка…" Click="NewBranch_Click"/>
@@ -28,26 +25,39 @@
         <MenuItem Header="Create PR…" Click="CreatePr_Click"/>
         <MenuItem Header="Auto Pull Request" Click="AutoPr_Click"/>
       </MenuItem>
-      <MenuItem Header="Войти…" Click="SignIn_Click"/>
       <MenuItem Header="Настройки" Click="Settings_Click"/>
     </Menu>
 
-    <ToolBarTray DockPanel.Dock="Top" Background="{StaticResource PanelBrush}">
-      <ToolBar>
-        <Button Content="↻ Sync" Click="Sync_Click" ToolTip="Подтянуть файлы текущей ветки"/>
-        <Button Content="⎇ Новая ветка" Click="NewBranch_Click"/>
-        <Button Content="📄 Новый скрипт" Click="NewScript_Click"/>
-        <Separator/>
-        <Button Content="💾 Сохранить" Click="Save_Click"/>
-        <Button Content="↗ Create PR" Click="CreatePr_Click"/>
-        <Separator/>
-        <Button Content="Войти" Click="SignIn_Click" ToolTip="Вход в Azure DevOps через учётную запись Microsoft"/>
-      </ToolBar>
-    </ToolBarTray>
+    <Border DockPanel.Dock="Top" Background="{StaticResource PanelBrush}"
+            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="Файлы" VerticalAlignment="Center" Margin="4,0,6,0"
+                   Foreground="{StaticResource FgMutedBrush}"/>
+        <Button Content="📄 Новый скрипт" Click="NewScript_Click" Style="{StaticResource ToolbarButton}"/>
+        <Button Content="💾 Сохранить" Click="Save_Click" Style="{StaticResource ToolbarButton}"/>
+        <Border Width="1" Margin="12,2" Background="{StaticResource BorderBrush}"/>
+        <TextBlock Text="Git" VerticalAlignment="Center" Margin="4,0,6,0"
+                   Foreground="{StaticResource FgMutedBrush}"/>
+        <Button Content="↻ Sync" Click="Sync_Click" Style="{StaticResource ToolbarButton}"
+                ToolTip="Подтянуть файлы текущей ветки"/>
+        <Button Content="⎇ Новая ветка" Click="NewBranch_Click" Style="{StaticResource ToolbarButton}"/>
+      </StackPanel>
+    </Border>
 
-    <StatusBar DockPanel.Dock="Bottom" Height="28">
+    <StatusBar DockPanel.Dock="Bottom" Height="32">
       <StatusBarItem>
-        <TextBlock x:Name="StatusText" Text="готов" Foreground="White"/>
+        <StackPanel Orientation="Horizontal" Margin="4,0,8,0">
+          <Ellipse x:Name="StatusDot" Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0">
+            <Ellipse.Fill>
+              <SolidColorBrush Color="#3DDC97"/>
+            </Ellipse.Fill>
+          </Ellipse>
+          <TextBlock x:Name="StatusText" Text="Готов" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center">
+            <TextBlock.Foreground>
+              <SolidColorBrush Color="#3DDC97"/>
+            </TextBlock.Foreground>
+          </TextBlock>
+        </StackPanel>
       </StatusBarItem>
       <Separator/>
       <StatusBarItem>
@@ -103,7 +113,7 @@
                                  WordWrap="False"
                                  Background="{StaticResource BgBrush}"
                                  Foreground="{StaticResource FgBrush}"
-                                 LineNumbersForeground="#858585"/>
+                                 LineNumbersForeground="#7E90A8"/>
         </DockPanel>
 
         <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
@@ -112,31 +122,28 @@
         <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
           <TextBlock DockPanel.Dock="Top" Text="Лог" FontWeight="SemiBold" Margin="8,6,8,2"
                      Foreground="{StaticResource FgBrush}"/>
-          <TextBox x:Name="LogBox"
-                   IsReadOnly="True"
-                   IsReadOnlyCaretVisible="True"
-                   AcceptsReturn="True"
-                   TextWrapping="NoWrap"
-                   BorderThickness="0"
-                   Background="{StaticResource BgBrush}"
-                   Foreground="{StaticResource FgBrush}"
-                   CaretBrush="{StaticResource FgBrush}"
-                   FontFamily="Consolas"
-                   FontSize="12"
-                   VerticalScrollBarVisibility="Auto"
-                   HorizontalScrollBarVisibility="Auto"/>
+          <RichTextBox x:Name="LogBox"
+                       IsReadOnly="True"
+                       IsDocumentEnabled="False"
+                       BorderThickness="0"
+                       Background="{StaticResource BgBrush}"
+                       Foreground="{StaticResource FgBrush}"
+                       CaretBrush="{StaticResource FgBrush}"
+                       FontFamily="Consolas"
+                       FontSize="12"
+                       VerticalScrollBarVisibility="Auto"
+                       HorizontalScrollBarVisibility="Auto"/>
         </DockPanel>
       </Grid>
 
       <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
                     ResizeDirection="Columns" Background="{StaticResource BorderBrush}"/>
 
-      <Grid Grid.Column="2">
+      <Grid x:Name="RightColumn" Grid.Column="2">
         <Grid.RowDefinitions>
-          <RowDefinition Height="*" MinHeight="120"/>
-          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*" MinHeight="80"/>
           <RowDefinition Height="6"/>
-          <RowDefinition Height="240" MinHeight="140"/>
+          <RowDefinition Height="360" MinHeight="220"/>
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" Background="{StaticResource PanelBrush}">
@@ -146,20 +153,42 @@
                     Padding="2,2,0,4"
                     MouseDoubleClick="ProjectTree_MouseDoubleClick"
                     PreviewMouseRightButtonDown="ProjectTree_PreviewMouseRightButtonDown"
-                    PreviewKeyDown="ProjectTree_PreviewKeyDown"/>
+                    PreviewKeyDown="ProjectTree_PreviewKeyDown">
+            <TreeView.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Создать файл" Click="CreateFileFromTree_Click"/>
+                <MenuItem Header="Создать папку" Click="CreateFolderFromTree_Click"/>
+                <Separator/>
+                <MenuItem Header="Удалить" Click="DeleteFromTree_Click"/>
+              </ContextMenu>
+            </TreeView.ContextMenu>
+          </TreeView>
         </DockPanel>
 
-        <Border Grid.Row="1" Background="{StaticResource PanelBrush}" Padding="8,8,8,4"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
-          <Button x:Name="AutoPrButton" Content="Auto Pull Request" Click="AutoPr_Click"
-                  HorizontalAlignment="Stretch"
-                  ToolTip="Создать ветку, закоммитить скрипты и открыть PR по шаблону"/>
-        </Border>
-
-        <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch"
+        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
                       ResizeDirection="Rows" Background="{StaticResource BorderBrush}"/>
 
-        <DockPanel Grid.Row="3" Background="{StaticResource PanelBrush}">
+        <DockPanel Grid.Row="2" Background="{StaticResource PanelBrush}">
+          <Border DockPanel.Dock="Top" Padding="8,8,8,8"
+                  BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Button x:Name="AutoPrButton" Click="AutoPr_Click"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                    ToolTip="Создать ветку, закоммитить скрипты и открыть PR по шаблону">
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Path Width="11" Height="11" Stretch="Uniform" Fill="White" VerticalAlignment="Center"
+                      Data="M6,0 L7.1,4.4 L11.5,5.5 L7.1,6.6 L6,11 L4.9,6.6 L0.5,5.5 L4.9,4.4 Z"/>
+                <Path Width="6" Height="6" Stretch="Uniform" Fill="#D6E6FF" Margin="3,0,0,7"
+                      VerticalAlignment="Center"
+                      Data="M6,0 L7.1,4.4 L11.5,5.5 L7.1,6.6 L6,11 L4.9,6.6 L0.5,5.5 L4.9,4.4 Z"/>
+                <TextBlock Text="Auto Pull Request" Margin="8,0" VerticalAlignment="Center"/>
+                <Path Width="6" Height="6" Stretch="Uniform" Fill="#D6E6FF" Margin="0,7,3,0"
+                      VerticalAlignment="Center"
+                      Data="M6,0 L7.1,4.4 L11.5,5.5 L7.1,6.6 L6,11 L4.9,6.6 L0.5,5.5 L4.9,4.4 Z"/>
+                <Path Width="11" Height="11" Stretch="Uniform" Fill="White" VerticalAlignment="Center"
+                      Data="M6,0 L7.1,4.4 L11.5,5.5 L7.1,6.6 L6,11 L4.9,6.6 L0.5,5.5 L4.9,4.4 Z"/>
+              </StackPanel>
+            </Button>
+          </Border>
           <TextBlock DockPanel.Dock="Top" Text="ВЕТКА / PR" FontWeight="SemiBold" Margin="8,8,8,4"
                      Foreground="{StaticResource FgBrush}"/>
           <StackPanel DockPanel.Dock="Top" Margin="8,0,8,8">
@@ -170,7 +199,7 @@
                             IsChecked="{Binding IsOpen, ElementName=BranchPopup, Mode=TwoWay}"
                             ToolTip="Переключить текущую ветку">
                 <DockPanel LastChildFill="True">
-                  <TextBlock DockPanel.Dock="Right" Text="▾" Margin="8,0,0,0"
+                  <TextBlock DockPanel.Dock="Right" Text="▴" Margin="8,0,0,0"
                              VerticalAlignment="Center" Foreground="{StaticResource FgMutedBrush}"/>
                   <TextBlock x:Name="BranchButtonText" Text="—" TextTrimming="CharacterEllipsis"
                              VerticalAlignment="Center" Foreground="{StaticResource FgBrush}"/>
@@ -178,13 +207,13 @@
               </ToggleButton>
               <Popup x:Name="BranchPopup"
                      PlacementTarget="{Binding ElementName=BranchButton}"
-                     Placement="Bottom"
+                     Placement="Custom"
                      StaysOpen="False"
                      AllowsTransparency="True"
-                     PopupAnimation="Fade"
+                     PopupAnimation="None"
                      Opened="BranchPopup_Opened">
                 <Border Background="{StaticResource PanelAltBrush}"
-                        BorderBrush="#555555"
+                        BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
                         Padding="8"
                         MinWidth="{Binding ActualWidth, ElementName=BranchButton}">
@@ -193,15 +222,17 @@
                                Foreground="{StaticResource FgMutedBrush}"/>
                     <TextBox x:Name="BranchSearchBox" DockPanel.Dock="Top" Margin="0,0,0,8"
                              TextChanged="BranchSearchBox_TextChanged"/>
-                    <TextBlock x:Name="BranchEmptyText" DockPanel.Dock="Top" Text="нет веток"
-                               Margin="0,4" Visibility="Collapsed"
-                               Foreground="{StaticResource FgMutedBrush}"/>
-                    <TreeView x:Name="BranchTree"
-                              MaxHeight="320"
-                              BorderThickness="0"
-                              Background="{StaticResource PanelAltBrush}"
-                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                              SelectedItemChanged="BranchTree_SelectedItemChanged"/>
+                    <Grid Height="260">
+                      <TreeView x:Name="BranchTree"
+                                BorderThickness="0"
+                                Background="{StaticResource PanelAltBrush}"
+                                ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                SelectedItemChanged="BranchTree_SelectedItemChanged"/>
+                      <TextBlock x:Name="BranchEmptyText" Text="нет веток"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 Visibility="Collapsed"
+                                 Foreground="{StaticResource FgMutedBrush}"/>
+                    </Grid>
                   </DockPanel>
                 </Border>
               </Popup>
@@ -219,15 +250,7 @@
                        Foreground="{StaticResource FgMutedBrush}"/>
             <TreeView x:Name="ChangesTree"
                       Padding="2,2,0,4"
-                      MouseDoubleClick="ChangesTree_MouseDoubleClick"
-                      PreviewMouseRightButtonDown="ChangesTree_PreviewMouseRightButtonDown"
-                      ContextMenuOpening="ChangesTree_ContextMenuOpening">
-              <TreeView.ContextMenu>
-                <ContextMenu>
-                  <MenuItem Header="Отменить изменения" Click="RevertChange_Click"/>
-                </ContextMenu>
-              </TreeView.ContextMenu>
-            </TreeView>
+                      MouseDoubleClick="ChangesTree_MouseDoubleClick"/>
           </Grid>
         </DockPanel>
       </Grid>
