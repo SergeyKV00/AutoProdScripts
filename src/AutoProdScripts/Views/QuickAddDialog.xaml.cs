@@ -47,7 +47,7 @@ public partial class QuickAddDialog : Window
             ApplySql();
         };
         MappingStatus.Text = mappingError is null
-            ? $"Mapping: {mapping.FilePath} · правил: {mapping.Mappings.Count} · если USE не найден: {mapping.OnMissingMapping}"
+            ? $"Mapping: {mapping.FilePath} · правил: {mapping.Mappings.Count}"
             : $"Ошибка mapping: {mappingError}. Папку можно выбрать вручную.";
         if (mappingError is not null)
             MappingStatus.Foreground = ErrorBrush;

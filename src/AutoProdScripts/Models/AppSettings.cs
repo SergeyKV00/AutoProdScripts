@@ -16,6 +16,7 @@ public sealed class AppSettings
     public string AutoBaseBranch { get; set; } = string.Empty;
     public string AutoBranchNameTemplate { get; set; } = string.Empty;
     public string TelegramMessageTemplate { get; set; } = string.Empty;
+    public string TelegramLinkCaption { get; set; } = string.Empty;
     public string TelegramTags { get; set; } = string.Empty;
     public List<TelegramCustomTemplate> TelegramCustomTemplates { get; set; } = new();
     public List<SavedReviewer> AutoReviewers { get; set; } = new();

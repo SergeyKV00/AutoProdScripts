@@ -13,8 +13,8 @@
       <MenuItem Header="Файл">
         <MenuItem Header="Сохранить" Click="Save_Click" InputGestureText="Ctrl+S"/>
         <MenuItem Header="Быстрое добавление…" Click="QuickAdd_Click"/>
-        <MenuItem Header="Проанализировать папки и USE" Click="AnalyzeUse_Click"/>
-        <MenuItem Header="Обновить mapping" Click="ReloadMapping_Click"/>
+        <!--<MenuItem Header="Проанализировать папки и USE" Click="AnalyzeUse_Click"/>
+        <MenuItem Header="Обновить mapping" Click="ReloadMapping_Click"/>-->
         <MenuItem Header="Открыть папку mapping" Click="OpenMappingFolder_Click"/>
         <MenuItem Header="Настройки…" Click="Settings_Click"/>
         <Separator/>
@@ -22,6 +22,7 @@
       </MenuItem>
       <MenuItem Header="Git">
         <MenuItem Header="Sync" Click="Sync_Click"/>
+        <MenuItem Header="Pull" Click="Pull_Click"/>
         <MenuItem Header="Новая ветка…" Click="NewBranch_Click"/>
         <MenuItem Header="Переключить ветку…" Click="SwitchBranch_Click"/>
         <MenuItem Header="Статус" Click="Status_Click"/>
@@ -45,6 +46,8 @@
                    Foreground="{StaticResource FgMutedBrush}"/>
         <Button Content="↻ Sync" Click="Sync_Click" Style="{StaticResource ToolbarButton}"
                 ToolTip="Подтянуть файлы текущей ветки"/>
+        <Button Content="↓ Pull" Click="Pull_Click" Style="{StaticResource ToolbarButton}"
+                ToolTip="git pull текущей ветки. Без push и без обновления остальных веток"/>
         <Button Content="⎇ Новая ветка" Click="NewBranch_Click" Style="{StaticResource ToolbarButton}"/>
       </StackPanel>
     </Border>
@@ -180,6 +183,15 @@
                     HorizontalAlignment="Stretch"
                     ToolTip="Вставить несколько SQL и разложить по папкам">
               <TextBlock Text="⚡ Быстрое добавление" VerticalAlignment="Center"/>
+            </Button>
+          </Border>
+          <Border x:Name="TestAutoPrHost" DockPanel.Dock="Top" Padding="8,8,8,0" Visibility="Collapsed">
+            <Button x:Name="TestAutoPrButton" Click="TestAutoPr_Click"
+                    Height="36" Margin="0" Padding="10,4"
+                    HorizontalAlignment="Stretch"
+                    Style="{StaticResource SecondaryButton}"
+                    ToolTip="Проверить шаблон Telegram без git и без создания PR">
+              <TextBlock Text="Test Auto Pull Request" VerticalAlignment="Center"/>
             </Button>
           </Border>
           <Border DockPanel.Dock="Top" Padding="8,8,8,8"

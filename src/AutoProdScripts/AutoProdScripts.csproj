@@ -19,6 +19,7 @@
   <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Azure.Identity.Broker" Version="1.7.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 

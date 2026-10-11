@@ -35,9 +35,6 @@
                        CaretBrush="{StaticResource FgBrush}"
                        BorderBrush="#555555"/>
           <TextBlock Text="Ctrl+K — задать свой текст ссылки" Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,0"/>
-          <Label Content="Теги"/>
-          <TextBox x:Name="TelegramTagsBox" AcceptsReturn="True" TextWrapping="Wrap" Height="56"
-                   VerticalScrollBarVisibility="Auto" TextChanged="TelegramTagsBox_TextChanged"/>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

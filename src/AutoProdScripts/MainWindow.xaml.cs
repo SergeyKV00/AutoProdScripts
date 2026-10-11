@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private OpenDocument? _activeDocument;
     private string? _currentFilePath;
     private bool _dirty;
+    private bool _testMode;
     private bool _suppressEditorEvents;
     private string? _currentBranch;
     private string? _selectedFolderRel;
@@ -70,7 +71,36 @@ public partial class MainWindow : Window
         {
             Save_Click(sender, e);
             e.Handled = true;
+            return;
         }
+
+        if (e.Key == Key.D && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            _testMode = !_testMode;
+            TestAutoPrHost.Visibility = _testMode ? Visibility.Visible : Visibility.Collapsed;
+            var message = _testMode ? "тестовый режим включён" : "тестовый режим выключен";
+            App.Log.Info(message);
+            SetStatus(message);
+            e.Handled = true;
+        }
+    }
+
+    private void TestAutoPr_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = App.Settings.Current;
+        var text = TelegramPreviewRenderer.DemoText;
+        var pr = new PullRequestResult(
+            true,
+            128,
+            TelegramPreviewRenderer.DemoUrl,
+            "Тестовый PR. Изменения в git не отправлялись, pull request не создавался.",
+            text);
+        ShowTelegramResult(
+            "Тестовый Pull Request #128",
+            "Режим проверки шаблона. Git и Azure DevOps не вызывались.",
+            pr,
+            text,
+            settings);
     }
 
     private async Task OnLoadedAsync()
@@ -612,6 +642,30 @@ public partial class MainWindow : Window
             App.Log.Error($"sync failed: {result.CombinedOutput}");
             SetStatus("ошибка sync");
             MessageBox.Show(this, result.CombinedOutput, "Sync", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        await RefreshBranchUiAsync();
+        await RefreshChangesAsync();
+    }
+
+    private async void Pull_Click(object sender, RoutedEventArgs e)
+    {
+        if (_git is null) return;
+        SetStatus("pull…");
+        var remote = App.Settings.Current.RemoteName;
+        var result = await _git.PullCurrentBranchAsync(remote);
+        if (result.Success)
+        {
+            var detail = OneLine(result.CombinedOutput);
+            App.Log.Info(string.IsNullOrWhiteSpace(detail) ? $"pull ok ({remote})" : $"pull ok ({remote}): {detail}");
+            SetStatus("pull ok");
+            RefreshTree();
+        }
+        else
+        {
+            App.Log.Error($"pull failed: {result.CombinedOutput}");
+            SetStatus("ошибка pull");
+            MessageBox.Show(this, result.CombinedOutput, "Pull", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         await RefreshBranchUiAsync();
@@ -1944,10 +1998,7 @@ public partial class MainWindow : Window
 
     private void ShowTelegramResult(string heading, string status, PullRequestResult pr, string text, AppSettings settings)
     {
-        var caption = string.IsNullOrWhiteSpace(text) ? "PR" : text;
-        var template = TelegramMessage.ExpandCustom(
-            settings.TelegramMessageTemplate,
-            settings.TelegramCustomTemplates);
+        var caption = AutoPrTemplate.LinkCaptionOrDefault(settings.TelegramLinkCaption);
         new PullRequestResultDialog(
             heading,
             status,
@@ -1955,11 +2006,12 @@ public partial class MainWindow : Window
             success: true,
             telegram: new TelegramCompose
             {
-                Template = template,
+                Template = settings.TelegramMessageTemplate ?? string.Empty,
                 Text = text,
                 LinkCaption = caption,
                 LinkUrl = pr.Url ?? string.Empty,
-                Tags = settings.TelegramTags ?? string.Empty
+                Tags = settings.TelegramTags ?? string.Empty,
+                Custom = settings.TelegramCustomTemplates
             })
         { Owner = this }.ShowDialog();
     }

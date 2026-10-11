@@ -1,10 +1,17 @@
+using System.Text.RegularExpressions;
+
 namespace AutoProdScripts.Models;
 
 public static class AutoPrTemplate
 {
     public const string DefaultBranchTemplate = "{base}_{yyyyMMddHHmm}";
     public const string DefaultTelegramTemplate =
-        "Доброе утро. Выполните пожалуйста скрипты {link}\n{tags}";
+        "Доброе утро. Выполните, пожалуйста, скрипты {link}\n{tags}";
+    public const string DefaultLinkCaption = "Открыть PR";
+    public const int TelegramMaxLength = 4096;
+
+    public static string LinkCaptionOrDefault(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? DefaultLinkCaption : value.Trim();
 
     public static bool IsReady(AppSettings settings) =>
         settings.AutoPrTemplateConfigured
@@ -104,19 +111,65 @@ public static class TelegramMessage
         string text,
         string linkCaption,
         string? tags,
+        IEnumerable<TelegramCustomTemplate>? custom = null) =>
+        string.Concat(Parts(template, text, linkCaption, tags, custom).Select(part => part.Value)).Trim();
+
+    public static IReadOnlyList<TelegramPart> Parts(
+        string? template,
+        string text,
+        string? linkCaption,
+        string? tags,
         IEnumerable<TelegramCustomTemplate>? custom = null)
     {
-        var body = ExpandCustom(template, custom);
-        return ExpandBase(body, text, linkCaption, tags).Trim();
+        return Tokenize(ExpandCustom(template, custom), text, linkCaption, tags);
     }
 
     public static string ExpandBase(string body, string text, string linkCaption, string? tags) =>
-        body
-            .Replace("{text}", text, StringComparison.Ordinal)
-            .Replace("{title}", text, StringComparison.Ordinal)
-            .Replace("{link}", linkCaption, StringComparison.Ordinal)
-            .Replace("{tags}", FormatTags(tags), StringComparison.Ordinal);
+        string.Concat(Tokenize(body, text, linkCaption, tags).Select(part => part.Value));
 
-    private static string ReplaceToken(string body, string name, string value) =>
-        body.Replace("{" + name + "}", value, StringComparison.OrdinalIgnoreCase);
+    private static IReadOnlyList<TelegramPart> Tokenize(string body, string text, string? linkCaption, string? tags)
+    {
+        var caption = AutoPrTemplate.LinkCaptionOrDefault(linkCaption);
+        var formattedTags = FormatTags(tags);
+        var pattern = new Regex(@"\{([^{}]+)\}");
+        var parts = new List<TelegramPart>();
+        var index = 0;
+        foreach (Match match in pattern.Matches(body))
+        {
+            if (match.Index > index)
+                parts.Add(new TelegramPart(TelegramPartKind.Text, body[index..match.Index]));
+
+            var key = match.Groups[1].Value.Trim();
+            if (key.Equals("link", StringComparison.OrdinalIgnoreCase))
+                parts.Add(new TelegramPart(TelegramPartKind.Link, caption));
+            else if (key.Equals("tags", StringComparison.OrdinalIgnoreCase))
+                parts.Add(new TelegramPart(TelegramPartKind.Tags, formattedTags));
+            else if (key.Equals("text", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals("title", StringComparison.OrdinalIgnoreCase))
+                parts.Add(new TelegramPart(TelegramPartKind.Text, text ?? string.Empty));
+            else
+                parts.Add(new TelegramPart(TelegramPartKind.Text, match.Value));
+
+            index = match.Index + match.Length;
+        }
+
+        if (index < body.Length)
+            parts.Add(new TelegramPart(TelegramPartKind.Text, body[index..]));
+        return parts;
+    }
+
+    private static string ReplaceToken(string body, string name, string value)
+    {
+        var pattern = new Regex(@"\{" + Regex.Escape(name) + @"\}", RegexOptions.IgnoreCase);
+        return pattern.Replace(body, _ => value);
+    }
 }
+
+public enum TelegramPartKind
+{
+    Text,
+    Link,
+    Tags
+}
+
+public readonly record struct TelegramPart(TelegramPartKind Kind, string Value);
