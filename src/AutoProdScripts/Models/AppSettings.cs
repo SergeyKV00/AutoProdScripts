@@ -18,8 +18,17 @@ public sealed class AppSettings
     public string TelegramMessageTemplate { get; set; } = string.Empty;
     public string TelegramLinkCaption { get; set; } = string.Empty;
     public string TelegramTags { get; set; } = string.Empty;
+    public string TelegramTimeZoneId { get; set; } = string.Empty;
+    public List<TelegramTimeTextRule> TelegramTimeTexts { get; set; } = new();
     public List<TelegramCustomTemplate> TelegramCustomTemplates { get; set; } = new();
     public List<SavedReviewer> AutoReviewers { get; set; } = new();
+}
+
+public sealed class TelegramTimeTextRule
+{
+    public string From { get; set; } = string.Empty;
+    public string To { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
 }
 
 public sealed class TelegramCustomTemplate

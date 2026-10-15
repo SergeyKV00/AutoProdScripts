@@ -182,7 +182,7 @@
                     </DockPanel>
                     <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" Margin="0,6,0,0"
                                Foreground="{StaticResource FgMutedBrush}"
-                               Text="Переменные можно ставить в любое место. {link} — ссылка на PR, {tags} — получатели."/>
+                               Text="Переменные можно ставить в любое место. {link} — ссылка на PR, {tags} — получатели, {timeText} — текст по времени суток."/>
                     <TextBox x:Name="TelegramTemplateBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
                              VerticalScrollBarVisibility="Auto" TextChanged="AutoTemplate_Changed"/>
                   </DockPanel>
@@ -209,6 +209,22 @@
                       <Button DockPanel.Dock="Right" Content="Добавить" Click="AddRecipient_Click" Width="110" Margin="8,0,0,0"/>
                       <TextBox x:Name="RecipientInputBox" ToolTip="@username" KeyDown="RecipientInputBox_KeyDown"/>
                     </DockPanel>
+                  </StackPanel>
+                </Border>
+
+                <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
+                  <StackPanel>
+                    <TextBlock Text="Текст по времени" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
+                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{StaticResource FgMutedBrush}"
+                               Text="Тег {timeText} заменяется текстом первого периода, в который попадает текущее время. Если период не найден, подставляется пустая строка. Конец периода не включается. Период через полночь, например 22:00–06:00, тоже учитывается."/>
+                    <TextBlock Text="Часовой пояс" Foreground="{StaticResource FgMutedBrush}"/>
+                    <ComboBox x:Name="TelegramTimeZoneBox" Margin="0,4,0,8" SelectionChanged="AutoTemplate_Changed"/>
+                    <StackPanel x:Name="TelegramTimeTextsHost"/>
+                    <Button Content="Добавить период" Click="AddTimeText_Click" Style="{StaticResource SecondaryButton}"
+                            HorizontalAlignment="Left" Margin="0,4,0,0"/>
+                    <TextBlock x:Name="TelegramTimeTextNow" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Foreground="{StaticResource FgInfoBrush}"/>
                   </StackPanel>
                 </Border>
 

@@ -20,6 +20,7 @@ public partial class SettingsWindow : Window
     private List<SavedReviewer> _autoReviewers = new();
     private readonly List<CustomTemplateRow> _customTemplates = new();
     private readonly List<string> _recipients = new();
+    private readonly List<TimeTextRow> _timeTextRows = new();
 
     public AppSettings? ResultSettings { get; private set; }
     public string? ResultPat { get; private set; }
@@ -54,6 +55,8 @@ public partial class SettingsWindow : Window
             : s.TelegramMessageTemplate;
         TelegramLinkCaptionBox.Text = AutoPrTemplate.LinkCaptionOrDefault(s.TelegramLinkCaption);
         LoadRecipients(s.TelegramTags);
+        LoadTimeZones(s.TelegramTimeZoneId);
+        LoadTimeTexts(s.TelegramTimeTexts);
         foreach (var part in s.TelegramCustomTemplates ?? new List<TelegramCustomTemplate>())
         {
             if (!string.IsNullOrWhiteSpace(part.Name))
@@ -342,12 +345,20 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        if (!TryCollectTimeTexts(out var timeTexts))
+        {
+            SettingsTabs.SelectedItem = AutoPrTab;
+            return;
+        }
+
         var previewLength = TelegramMessage.Build(
             TelegramTemplateBox.Text,
             TelegramPreviewRenderer.DemoText,
             TelegramLinkCaptionBox.Text,
             string.Join(' ', _recipients),
-            CurrentCustomTemplates()).Length;
+            CurrentCustomTemplates(),
+            timeTexts,
+            SelectedTimeZoneId()).Length;
         if (previewLength > AutoPrTemplate.TelegramMaxLength)
         {
             MessageBox.Show(this, $"Сообщение длиннее {AutoPrTemplate.TelegramMaxLength} символов — Telegram его не примет.",
@@ -374,6 +385,8 @@ public partial class SettingsWindow : Window
             TelegramMessageTemplate = TelegramTemplateBox.Text,
             TelegramLinkCaption = TelegramLinkCaptionBox.Text.Trim(),
             TelegramTags = string.Join(' ', _recipients),
+            TelegramTimeZoneId = SelectedTimeZoneId(),
+            TelegramTimeTexts = timeTexts,
             TelegramCustomTemplates = _customTemplates
                 .Select(row => new TelegramCustomTemplate { Name = row.Name, Value = row.ValueBox.Text })
                 .ToList(),
@@ -410,12 +423,16 @@ public partial class SettingsWindow : Window
             : $"Пример ветки: {branch}";
 
         var custom = CurrentCustomTemplates();
+        var timeTexts = CurrentTimeTexts();
+        var timeZoneId = SelectedTimeZoneId();
         var message = TelegramMessage.Build(
             TelegramTemplateBox.Text,
             TelegramPreviewRenderer.DemoText,
             TelegramLinkCaptionBox.Text,
             string.Join(' ', _recipients),
-            custom);
+            custom,
+            timeTexts,
+            timeZoneId);
         var count = message.Length;
         TelegramCountText.Text = $"{count} / {AutoPrTemplate.TelegramMaxLength}";
         TelegramCountText.Foreground = (Brush)FindResource(count > AutoPrTemplate.TelegramMaxLength ? "FgBrush" : "FgMutedBrush");
@@ -432,7 +449,18 @@ public partial class SettingsWindow : Window
             string.Join(' ', _recipients),
             custom,
             (Brush)FindResource("FgInfoBrush"),
-            openLink: null);
+            openLink: null,
+            timeTexts,
+            timeZoneId);
+        if (TelegramTimeTextNow is not null)
+        {
+            var zone = TelegramMessage.ResolveTimeZone(timeZoneId);
+            var local = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, zone);
+            var sample = TelegramMessage.ResolveTimeText(timeTexts, zone.Id);
+            TelegramTimeTextNow.Text = string.IsNullOrEmpty(sample)
+                ? $"Сейчас {local:HH:mm}: текст по времени не подставится."
+                : $"Сейчас {local:HH:mm}: подставится «{sample}».";
+        }
         var document = new FlowDocument
         {
             PagePadding = new Thickness(0),
@@ -461,6 +489,7 @@ public partial class SettingsWindow : Window
         menu.Items.Clear();
         AddTokenItem(menu, "link", "{link} — ссылка на PR");
         AddTokenItem(menu, "tags", "{tags} — получатели");
+        AddTokenItem(menu, "timeText", "{timeText} — текст по времени суток");
         AddTokenItem(menu, "text", "{text} — описание скриптов, необязательно");
     }
 
@@ -617,12 +646,129 @@ public partial class SettingsWindow : Window
     private IEnumerable<TelegramCustomTemplate> CurrentCustomTemplates() =>
         _customTemplates.Select(row => new TelegramCustomTemplate { Name = row.Name, Value = row.ValueBox.Text });
 
+    private void LoadTimeZones(string? selectedId)
+    {
+        if (TelegramTimeZoneBox is null)
+            return;
+        var zones = TimeZoneInfo.GetSystemTimeZones()
+            .OrderBy(zone => zone.BaseUtcOffset)
+            .ThenBy(zone => zone.DisplayName, StringComparer.CurrentCulture)
+            .ToList();
+        TelegramTimeZoneBox.ItemsSource = zones;
+        TelegramTimeZoneBox.DisplayMemberPath = nameof(TimeZoneInfo.DisplayName);
+        var id = string.IsNullOrWhiteSpace(selectedId) ? TimeZoneInfo.Local.Id : selectedId;
+        TelegramTimeZoneBox.SelectedItem = zones.FirstOrDefault(zone => zone.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
+            ?? zones.FirstOrDefault(zone => zone.Id == TimeZoneInfo.Local.Id);
+    }
+
+    private void LoadTimeTexts(IEnumerable<TelegramTimeTextRule>? rules)
+    {
+        _timeTextRows.Clear();
+        TelegramTimeTextsHost?.Children.Clear();
+        foreach (var rule in rules ?? Array.Empty<TelegramTimeTextRule>())
+            AddTimeTextRow(rule.From, rule.To, rule.Text);
+    }
+
+    private void AddTimeText_Click(object sender, RoutedEventArgs e)
+    {
+        AddTimeTextRow(string.Empty, string.Empty, string.Empty);
+        _autoTemplateTouched = true;
+        _timeTextRows.LastOrDefault()?.From.Focus();
+    }
+
+    private void AddTimeTextRow(string from, string to, string text)
+    {
+        var fromBox = new TextBox { Text = from, Width = 72, Margin = new Thickness(0, 0, 6, 0), ToolTip = "09:00" };
+        var toBox = new TextBox { Text = to, Width = 72, Margin = new Thickness(0, 0, 6, 0), ToolTip = "12:00" };
+        var textBox = new TextBox { Text = text, MinWidth = 140, ToolTip = "Доброе утро" };
+        fromBox.TextChanged += (_, _) => UpdateAutoPreview();
+        toBox.TextChanged += (_, _) => UpdateAutoPreview();
+        textBox.TextChanged += (_, _) => UpdateAutoPreview();
+
+        var remove = new Button
+        {
+            Content = "Удалить",
+            Style = (Style)FindResource("SecondaryButton"),
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(fromBox, 0);
+        Grid.SetColumn(toBox, 1);
+        Grid.SetColumn(textBox, 2);
+        Grid.SetColumn(remove, 3);
+        grid.Children.Add(fromBox);
+        grid.Children.Add(toBox);
+        grid.Children.Add(textBox);
+        grid.Children.Add(remove);
+        TelegramTimeTextsHost.Children.Add(grid);
+
+        var row = new TimeTextRow(fromBox, toBox, textBox, grid);
+        remove.Click += (_, _) =>
+        {
+            TelegramTimeTextsHost.Children.Remove(grid);
+            _timeTextRows.Remove(row);
+            _autoTemplateTouched = true;
+            UpdateAutoPreview();
+        };
+        _timeTextRows.Add(row);
+    }
+
+    private string SelectedTimeZoneId() =>
+        TelegramTimeZoneBox?.SelectedItem is TimeZoneInfo zone ? zone.Id : TimeZoneInfo.Local.Id;
+
+    private List<TelegramTimeTextRule> CurrentTimeTexts() =>
+        _timeTextRows
+            .Select(row => new TelegramTimeTextRule
+            {
+                From = row.From.Text.Trim(),
+                To = row.To.Text.Trim(),
+                Text = row.Text.Text ?? string.Empty
+            })
+            .Where(rule => rule.From.Length > 0 || rule.To.Length > 0 || rule.Text.Length > 0)
+            .ToList();
+
+    private bool TryCollectTimeTexts(out List<TelegramTimeTextRule> rules)
+    {
+        rules = new List<TelegramTimeTextRule>();
+        foreach (var rule in CurrentTimeTexts())
+        {
+            if (!TelegramMessage.TryParseClock(rule.From, out var from) || !TelegramMessage.TryParseClock(rule.To, out var to))
+            {
+                MessageBox.Show(this, "Укажите начало и конец периода в формате ЧЧ:мм.", "Настройка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            rules.Add(new TelegramTimeTextRule
+            {
+                From = from.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                To = to.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                Text = rule.Text
+            });
+        }
+
+        return true;
+    }
+
+    private sealed class TimeTextRow(TextBox from, TextBox to, TextBox text, FrameworkElement panel)
+    {
+        public TextBox From { get; } = from;
+        public TextBox To { get; } = to;
+        public TextBox Text { get; } = text;
+        public FrameworkElement Panel { get; } = panel;
+    }
+
     private void AddCustomTemplate_Click(object sender, RoutedEventArgs e)
     {
         var name = (CustomTemplateNameBox.Text ?? string.Empty).Trim();
         if (!IsCustomTemplateName(name))
         {
-            MessageBox.Show(this, "Имя шаблона: буква, затем буквы, цифры или _. Нельзя использовать text, link и tags.",
+            MessageBox.Show(this, "Имя шаблона: буква, затем буквы, цифры или _. Нельзя использовать text, link, tags и timeText.",
                 "Свой шаблон", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -706,7 +852,8 @@ public partial class SettingsWindow : Window
         if (name.Equals("text", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("title", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("link", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("tags", StringComparison.OrdinalIgnoreCase))
+            name.Equals("tags", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("timeText", StringComparison.OrdinalIgnoreCase))
             return false;
         return name.All(ch => char.IsLetterOrDigit(ch) || ch == '_') && char.IsLetter(name[0]);
     }

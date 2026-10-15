@@ -19,10 +19,13 @@ public static class TelegramPreviewRenderer
         string? tags,
         IEnumerable<TelegramCustomTemplate>? custom,
         Brush linkBrush,
-        Action<string>? openLink)
+        Action<string>? openLink,
+        IEnumerable<TelegramTimeTextRule>? timeTexts = null,
+        string? timeZoneId = null,
+        DateTimeOffset? now = null)
     {
         Run? tagsRun = null;
-        foreach (var part in TelegramMessage.Parts(template, text, linkCaption, tags, custom))
+        foreach (var part in TelegramMessage.Parts(template, text, linkCaption, tags, custom, timeTexts, timeZoneId, now))
         {
             switch (part.Kind)
             {

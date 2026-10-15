@@ -11,8 +11,8 @@
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
       <Button Content="Отмена" IsCancel="True" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Width="100"/>
-      <Button Content="Новая ветка" Click="New_Click" Style="{StaticResource SecondaryButton}" Width="130" Margin="8,0,0,0"/>
-      <Button Content="Из текущей ветки" IsDefault="True" Click="Current_Click" Width="160" Margin="8,0,0,0"/>
+      <Button x:Name="NewBranchButton" Content="Новая ветка" Click="New_Click" Style="{StaticResource SecondaryButton}" Width="130" Margin="8,0,0,0"/>
+      <Button x:Name="CurrentBranchButton" Content="Из текущей ветки" IsDefault="True" Click="Current_Click" Width="160" Margin="8,0,0,0"/>
     </StackPanel>
     <TextBlock x:Name="MessageText" TextWrapping="Wrap" Foreground="{StaticResource FgBrush}"/>
   </DockPanel>

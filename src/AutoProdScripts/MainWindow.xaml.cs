@@ -1777,26 +1777,10 @@ public partial class MainWindow : Window
                 settings.AzureDevOpsRepo);
             SetStatus("проверка PR…");
             var (prChecked, activePr) = await client.FindActivePullRequestAsync(currentBranch);
-            if (prChecked && activePr is not null && !string.IsNullOrWhiteSpace(activePr.Url))
+            var hasActivePr = prChecked && activePr is not null && !string.IsNullOrWhiteSpace(activePr.Url);
+            if (hasActivePr && changes.Count == 0)
             {
-                if (changes.Count > 0)
-                {
-                    var pushAnswer = MessageBox.Show(
-                        this,
-                        $"Есть изменения ({changes.Count}). Запушить их в текущую ветку?",
-                        "Auto Pull Request",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Question);
-                    if (pushAnswer != MessageBoxResult.Yes)
-                        return;
-
-                    var pushedTitle = AutoPrTemplate.SuggestTitle(changes.Select(c => c.Path));
-                    if (!await CommitAndPushAsync(settings, currentBranch, $"{currentBranch}: {pushedTitle}"))
-                        return;
-                    await RefreshChangesAsync();
-                }
-
-                App.Log.Info(activePr.Message + " " + activePr.Url);
+                App.Log.Info(activePr!.Message + " " + activePr.Url);
                 SetStatus("активный PR");
                 var text = string.IsNullOrWhiteSpace(activePr.Title) ? "скрипты" : activePr.Title;
                 var id = activePr.PullRequestId is null ? string.Empty : $" #{activePr.PullRequestId}";
@@ -1807,7 +1791,7 @@ public partial class MainWindow : Window
             if (!prChecked)
                 App.Log.Warn("не удалось проверить активные PR");
 
-            var choice = new AutoPrBranchChoiceDialog(currentBranch, changes.Count) { Owner = this };
+            var choice = new AutoPrBranchChoiceDialog(currentBranch, changes.Count, hasActivePr) { Owner = this };
             if (choice.ShowDialog() != true)
                 return;
 
@@ -2011,7 +1995,9 @@ public partial class MainWindow : Window
                 LinkCaption = caption,
                 LinkUrl = pr.Url ?? string.Empty,
                 Tags = settings.TelegramTags ?? string.Empty,
-                Custom = settings.TelegramCustomTemplates
+                Custom = settings.TelegramCustomTemplates,
+                TimeTexts = settings.TelegramTimeTexts,
+                TimeZoneId = settings.TelegramTimeZoneId
             })
         { Owner = this }.ShowDialog();
     }

@@ -33,7 +33,8 @@
                        Background="{StaticResource InputBrush}"
                        Foreground="{StaticResource FgBrush}"
                        CaretBrush="{StaticResource FgBrush}"
-                       BorderBrush="#555555"/>
+                       BorderBrush="#555555"
+                       DataObject.Copying="TelegramMessageBox_Copying"/>
           <TextBlock Text="Ctrl+K — задать свой текст ссылки" Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,0"/>
         </StackPanel>
       </StackPanel>

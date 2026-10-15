@@ -53,7 +53,9 @@ public partial class PullRequestResultDialog : Window
             telegram.Tags,
             telegram.Custom,
             (Brush)FindResource("FgInfoBrush"),
-            url => OpenUri(url));
+            url => OpenUri(url),
+            telegram.TimeTexts,
+            telegram.TimeZoneId);
         _prLink = paragraph.Inlines.OfType<Hyperlink>().FirstOrDefault();
         var document = new FlowDocument
         {
@@ -160,11 +162,39 @@ public partial class PullRequestResultDialog : Window
             TrySetClipboard(UrlBox.Text);
     }
 
-    private void CopyMessage_Click(object sender, RoutedEventArgs e)
+    private void CopyMessage_Click(object sender, RoutedEventArgs e) => CopyTelegramMessage();
+
+    private void TelegramMessageBox_Copying(object sender, DataObjectCopyingEventArgs e)
     {
-        var text = new TextRange(TelegramMessageBox.Document.ContentStart, TelegramMessageBox.Document.ContentEnd).Text.Trim();
-        if (!string.IsNullOrWhiteSpace(text))
-            TrySetClipboard(text);
+        var data = TelegramMessageClipboard.Create(TelegramMessageBox.Document);
+        if (data is null)
+            return;
+
+        e.CancelCommand();
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                Clipboard.SetDataObject(data, copy: true);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Буфер обмена", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        });
+    }
+
+    private void CopyTelegramMessage()
+    {
+        try
+        {
+            if (!TelegramMessageClipboard.TryCopy(TelegramMessageBox.Document))
+                return;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Буфер обмена", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void TrySetClipboard(string text)
@@ -190,4 +220,6 @@ public sealed class TelegramCompose
     public string LinkUrl { get; init; } = string.Empty;
     public string Tags { get; init; } = string.Empty;
     public IReadOnlyList<TelegramCustomTemplate>? Custom { get; init; }
+    public IReadOnlyList<TelegramTimeTextRule>? TimeTexts { get; init; }
+    public string? TimeZoneId { get; init; }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace AutoProdScripts.Models;
@@ -111,23 +112,95 @@ public static class TelegramMessage
         string text,
         string linkCaption,
         string? tags,
-        IEnumerable<TelegramCustomTemplate>? custom = null) =>
-        string.Concat(Parts(template, text, linkCaption, tags, custom).Select(part => part.Value)).Trim();
+        IEnumerable<TelegramCustomTemplate>? custom = null,
+        IEnumerable<TelegramTimeTextRule>? timeTexts = null,
+        string? timeZoneId = null,
+        DateTimeOffset? now = null) =>
+        string.Concat(Parts(template, text, linkCaption, tags, custom, timeTexts, timeZoneId, now).Select(part => part.Value)).Trim();
 
     public static IReadOnlyList<TelegramPart> Parts(
         string? template,
         string text,
         string? linkCaption,
         string? tags,
-        IEnumerable<TelegramCustomTemplate>? custom = null)
+        IEnumerable<TelegramCustomTemplate>? custom = null,
+        IEnumerable<TelegramTimeTextRule>? timeTexts = null,
+        string? timeZoneId = null,
+        DateTimeOffset? now = null)
     {
-        return Tokenize(ExpandCustom(template, custom), text, linkCaption, tags);
+        var timeText = ResolveTimeText(timeTexts, timeZoneId, now);
+        return Tokenize(ExpandCustom(template, custom), text, linkCaption, tags, timeText);
+    }
+
+    public static string ResolveTimeText(
+        IEnumerable<TelegramTimeTextRule>? rules,
+        string? timeZoneId,
+        DateTimeOffset? now = null)
+    {
+        var moment = now ?? DateTimeOffset.Now;
+        var local = TimeZoneInfo.ConvertTime(moment, ResolveTimeZone(timeZoneId));
+        var clock = TimeOnly.FromDateTime(local.DateTime);
+        foreach (var rule in rules ?? Array.Empty<TelegramTimeTextRule>())
+        {
+            if (!TryParseClock(rule.From, out var from) || !TryParseClock(rule.To, out var to))
+                continue;
+            if (IsInsidePeriod(from, to, clock))
+                return rule.Text ?? string.Empty;
+        }
+
+        return string.Empty;
+    }
+
+    public static bool TryParseClock(string? raw, out TimeOnly time)
+    {
+        time = default;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+        return TimeOnly.TryParseExact(
+            raw.Trim(),
+            new[] { "H:mm", "HH:mm", "H:mm:ss", "HH:mm:ss" },
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out time);
+    }
+
+    public static bool IsInsidePeriod(TimeOnly from, TimeOnly to, TimeOnly value)
+    {
+        if (from == to)
+            return false;
+        if (from < to)
+            return value >= from && value < to;
+        return value >= from || value < to;
+    }
+
+    public static TimeZoneInfo ResolveTimeZone(string? timeZoneId)
+    {
+        if (!string.IsNullOrWhiteSpace(timeZoneId))
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+            }
+            catch (InvalidTimeZoneException)
+            {
+            }
+        }
+
+        return TimeZoneInfo.Local;
     }
 
     public static string ExpandBase(string body, string text, string linkCaption, string? tags) =>
-        string.Concat(Tokenize(body, text, linkCaption, tags).Select(part => part.Value));
+        string.Concat(Tokenize(body, text, linkCaption, tags, string.Empty).Select(part => part.Value));
 
-    private static IReadOnlyList<TelegramPart> Tokenize(string body, string text, string? linkCaption, string? tags)
+    private static IReadOnlyList<TelegramPart> Tokenize(
+        string body,
+        string text,
+        string? linkCaption,
+        string? tags,
+        string timeText)
     {
         var caption = AutoPrTemplate.LinkCaptionOrDefault(linkCaption);
         var formattedTags = FormatTags(tags);
@@ -144,6 +217,8 @@ public static class TelegramMessage
                 parts.Add(new TelegramPart(TelegramPartKind.Link, caption));
             else if (key.Equals("tags", StringComparison.OrdinalIgnoreCase))
                 parts.Add(new TelegramPart(TelegramPartKind.Tags, formattedTags));
+            else if (key.Equals("timeText", StringComparison.OrdinalIgnoreCase))
+                parts.Add(new TelegramPart(TelegramPartKind.Text, timeText ?? string.Empty));
             else if (key.Equals("text", StringComparison.OrdinalIgnoreCase) ||
                      key.Equals("title", StringComparison.OrdinalIgnoreCase))
                 parts.Add(new TelegramPart(TelegramPartKind.Text, text ?? string.Empty));
