@@ -1,3 +1,4 @@
+using AutoProdScripts.Themes;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -376,6 +377,7 @@ public partial class SettingsWindow : Window
             LastBaseBranch = string.IsNullOrWhiteSpace(BaseBranchBox.Text) ? "master" : BaseBranchBox.Text.Trim(),
             RemoteName = "origin",
             IsConfigured = true,
+            Theme = App.Settings.Current.Theme,
             AuthMode = authMode,
             SavedReviewers = (App.Settings.Current.SavedReviewers ?? new List<SavedReviewer>())
                 .Select(r => r.Copy())
@@ -437,7 +439,7 @@ public partial class SettingsWindow : Window
         TelegramCountText.Text = $"{count} / {AutoPrTemplate.TelegramMaxLength}";
         TelegramCountText.Foreground = (Brush)FindResource(count > AutoPrTemplate.TelegramMaxLength ? "FgBrush" : "FgMutedBrush");
         if (count > AutoPrTemplate.TelegramMaxLength)
-            TelegramCountText.Foreground = Brushes.IndianRed;
+            TelegramCountText.Foreground = ThemeService.Brush("DangerBrush");
 
         var paragraph = new Paragraph { Margin = new Thickness(0) };
         TelegramPreviewRenderer.Render(

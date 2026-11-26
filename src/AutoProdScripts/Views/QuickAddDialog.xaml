@@ -6,8 +6,8 @@
         Height="680" Width="980"
         MinHeight="520" MinWidth="800"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}">
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource FgBrush}">
   <DockPanel Margin="12">
     <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -19,7 +19,7 @@
               Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Width="190"/>
     </DockPanel>
     <TextBlock x:Name="MappingStatus" DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
-               Foreground="{StaticResource FgMutedBrush}"/>
+               Foreground="{DynamicResource FgMutedBrush}"/>
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="2*"/>
@@ -39,13 +39,13 @@
                                ShowLineNumbers="True"
                                WordWrap="False"
                                IsEnabled="False"
-                               Background="{StaticResource BgBrush}"
-                               Foreground="{StaticResource FgBrush}"
-                               LineNumbersForeground="#7E90A8"
+                               Background="{DynamicResource BgBrush}"
+                               Foreground="{DynamicResource FgBrush}"
+                               LineNumbersForeground="{DynamicResource LineNumbersBrush}"
                                TextChanged="SqlBox_TextChanged"
                                ToolTip="Вставьте SQL. Пока папка не выбрана, имя файла — temp_1.sql. После папки оно станет yyyyMMddHHmm.sql."/>
       </DockPanel>
-      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
+      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="{DynamicResource BorderBrush}"/>
       <DockPanel Grid.Column="2" Margin="8,0,0,0">
         <TextBlock DockPanel.Dock="Top" Text="Куда попадут скрипты" FontWeight="SemiBold" Margin="0,0,0,8"/>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">

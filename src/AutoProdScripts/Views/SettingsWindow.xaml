@@ -5,8 +5,8 @@
         Height="820" Width="1080"
         MinHeight="640" MinWidth="860"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}"
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource FgBrush}"
         ResizeMode="CanResizeWithGrip">
   <Window.Resources>
     <Style TargetType="TabControl">
@@ -15,8 +15,8 @@
       <Setter Property="Padding" Value="0,8,0,0"/>
     </Style>
     <Style TargetType="TabItem">
-      <Setter Property="Foreground" Value="{StaticResource FgBrush}"/>
-      <Setter Property="Background" Value="{StaticResource PanelAltBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource FgBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource PanelAltBrush}"/>
       <Setter Property="Padding" Value="14,6"/>
       <Setter Property="Margin" Value="0,0,4,0"/>
       <Setter Property="Template">
@@ -27,7 +27,7 @@
                     Padding="{TemplateBinding Padding}"
                     Margin="{TemplateBinding Margin}"
                     CornerRadius="3,3,0,0"
-                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1,1,1,0">
               <ContentPresenter ContentSource="Header"
                                 HorizontalAlignment="Center"
@@ -35,8 +35,8 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource BgBrush}"/>
-                <Setter Property="Foreground" Value="#F0F0F0"/>
+                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource BgBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource OnSelectionBrush}"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -55,15 +55,15 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <TextBlock Text="1. Путь к ProductionScripts" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
-                   Foreground="{StaticResource FgBrush}"/>
+                   Foreground="{DynamicResource FgBrush}"/>
         <DockPanel Margin="0,0,0,4">
           <Button DockPanel.Dock="Right" Content="Обзор…" Click="Browse_Click" Width="90" Margin="8,0,0,0"/>
           <TextBox x:Name="ProjectPathBox" />
         </DockPanel>
-        <TextBlock x:Name="ProjectPathHint" Text="" Foreground="{StaticResource FgInfoBrush}" Margin="0,0,0,16" TextWrapping="Wrap"/>
+        <TextBlock x:Name="ProjectPathHint" Text="" Foreground="{DynamicResource FgInfoBrush}" Margin="0,0,0,16" TextWrapping="Wrap"/>
 
         <TextBlock Text="2. Azure DevOps" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
-                   Foreground="{StaticResource FgBrush}"/>
+                   Foreground="{DynamicResource FgBrush}"/>
         <Label Content="Org / URL"/>
         <TextBox x:Name="OrgUrlBox" Text="https://cit-damu.visualstudio.com/"/>
         <Grid Margin="0,8,0,0">
@@ -82,7 +82,7 @@
           </StackPanel>
         </Grid>
         <Label Content="Авторизация" Margin="0,12,0,0"/>
-        <TextBlock Text="Выберите, как входить в Azure DevOps." Foreground="{StaticResource FgMutedBrush}" Margin="0,0,0,8"/>
+        <TextBlock Text="Выберите, как входить в Azure DevOps." Foreground="{DynamicResource FgMutedBrush}" Margin="0,0,0,8"/>
         <UniformGrid Columns="2" Margin="0,0,0,12">
           <Button x:Name="PatAuthButton" Content="PAT" Click="SelectPatAuth_Click" Margin="0,0,6,0"/>
           <Button x:Name="MicrosoftAuthButton" Content="Учётная запись Microsoft" Click="SelectMicrosoftAuth_Click" Margin="6,0,0,0"/>
@@ -94,7 +94,7 @@
             <Button DockPanel.Dock="Right" Content="Проверить…" Click="ValidatePat_Click" Width="110" Margin="8,0,0,0"/>
             <PasswordBox x:Name="PatBox"/>
           </DockPanel>
-          <TextBlock x:Name="PatHint" Text="Секрет хранится в Credential Manager / DPAPI. Для создания PR нужна область Code (Read &amp; Write), для списка ревьюверов — Project and Team (Read)." Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,16" TextWrapping="Wrap"/>
+          <TextBlock x:Name="PatHint" Text="Секрет хранится в Credential Manager / DPAPI. Для создания PR нужна область Code (Read &amp; Write), для списка ревьюверов — Project and Team (Read)." Foreground="{DynamicResource FgMutedBrush}" Margin="0,4,0,16" TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel x:Name="MicrosoftPanel" Visibility="Collapsed">
@@ -104,18 +104,18 @@
             <Button x:Name="MicrosoftSignInButton" DockPanel.Dock="Right" Content="Войти…" Click="MicrosoftSignIn_Click"
                     Width="110" Margin="8,0,0,0"/>
             <TextBlock x:Name="MicrosoftAccountText" Text="Вход не выполнен" VerticalAlignment="Center" TextWrapping="Wrap"
-                       Foreground="{StaticResource FgBrush}"/>
+                       Foreground="{DynamicResource FgBrush}"/>
           </DockPanel>
-          <TextBlock x:Name="MicrosoftStatusText" Text="" Foreground="{StaticResource FgInfoBrush}" Margin="0,6,0,0" TextWrapping="Wrap"/>
-          <TextBlock Text="" Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,16" TextWrapping="Wrap"/>
+          <TextBlock x:Name="MicrosoftStatusText" Text="" Foreground="{DynamicResource FgInfoBrush}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+          <TextBlock Text="" Foreground="{DynamicResource FgMutedBrush}" Margin="0,4,0,16" TextWrapping="Wrap"/>
         </StackPanel>
 
         <TextBlock Text="3. Git (нужен Git for Windows в PATH)" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
-                   Foreground="{StaticResource FgBrush}"/>
-        <TextBlock x:Name="GitHint" Text="" Foreground="{StaticResource FgInfoBrush}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                   Foreground="{DynamicResource FgBrush}"/>
+        <TextBlock x:Name="GitHint" Text="" Foreground="{DynamicResource FgInfoBrush}" Margin="0,0,0,8" TextWrapping="Wrap"/>
         <Label Content="Базовая ветка"/>
         <ComboBox x:Name="BaseBranchBox" IsEditable="True"/>
-        <TextBlock Text="Выбор сохраняется между запусками." Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,0"/>
+        <TextBlock Text="Выбор сохраняется между запусками." Foreground="{DynamicResource FgMutedBrush}" Margin="0,4,0,0"/>
       </StackPanel>
     </ScrollViewer>
       </TabItem>
@@ -123,41 +123,41 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel>
             <TextBlock Text="Шаблон автоматического PR" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
-                       Foreground="{StaticResource FgBrush}"/>
-            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgMutedBrush}" Margin="0,0,0,12"
+                       Foreground="{DynamicResource FgBrush}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}" Margin="0,0,0,12"
                        Text="Кнопка Auto Pull Request создаёт ветку от выбранной базы, коммитит текущие скрипты, пушит и открывает PR с этими ревьюверами."/>
 
             <Label Content="Базовая ветка"/>
             <ComboBox x:Name="AutoBaseBranchBox" IsEditable="True" SelectionChanged="AutoTemplate_Changed" LostFocus="AutoTemplate_Changed"/>
-            <TextBlock Text="Новая ветка каждый раз создаётся от этой ветки." Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,8"/>
+            <TextBlock Text="Новая ветка каждый раз создаётся от этой ветки." Foreground="{DynamicResource FgMutedBrush}" Margin="0,4,0,8"/>
 
             <Label Content="Шаблон имени ветки"/>
             <TextBox x:Name="AutoBranchTemplateBox" TextChanged="AutoTemplate_Changed"/>
-            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,4"
+            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}" Margin="0,4,0,4"
                        Text="{}{base} — база, {yyyyMMddHHmm} — дата и время, также {yyyy} {MM} {dd} {HH} {mm}."/>
-            <TextBlock x:Name="BranchPreviewText" TextWrapping="Wrap" Foreground="{StaticResource FgInfoBrush}" Margin="0,0,0,12"/>
+            <TextBlock x:Name="BranchPreviewText" TextWrapping="Wrap" Foreground="{DynamicResource FgInfoBrush}" Margin="0,0,0,12"/>
 
-            <Border Background="{StaticResource PanelAltBrush}"
-                    BorderBrush="{StaticResource AccentBrush}"
+            <Border Background="{DynamicResource PanelAltBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
                     BorderThickness="2" CornerRadius="6" Padding="14" Margin="0,8,0,16">
               <StackPanel>
                 <DockPanel Margin="0,0,0,8">
                   <Button DockPanel.Dock="Right" Content="Добавить ревьюверов" Click="PickAutoReviewers_Click"
                           MinWidth="190" Margin="12,0,0,0"/>
                   <TextBlock Text="Ревьюверы Azure" FontSize="16" FontWeight="SemiBold"
-                             VerticalAlignment="Center" Foreground="{StaticResource FgBrush}"/>
+                             VerticalAlignment="Center" Foreground="{DynamicResource FgBrush}"/>
                 </DockPanel>
-                <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgInfoBrush}" Margin="0,0,0,10"
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgInfoBrush}" Margin="0,0,0,10"
                            Text="Эти люди будут добавлены в pull request. Обязательные попадут как required. Список сохраняется и больше не спрашивается при каждом Auto PR."/>
                 <TextBlock x:Name="AutoReviewersText" Text="Ревьюверы не выбраны" TextWrapping="Wrap"
-                           Foreground="{StaticResource FgMutedBrush}" Margin="0,0,0,8"/>
+                           Foreground="{DynamicResource FgMutedBrush}" Margin="0,0,0,8"/>
                 <WrapPanel x:Name="AutoReviewersHost"/>
               </StackPanel>
             </Border>
 
             <TextBlock Text="Шаблон сообщения Telegram" FontSize="15" FontWeight="SemiBold" Margin="0,8,0,4"
-                       Foreground="{StaticResource FgBrush}"/>
-            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgMutedBrush}" Margin="0,0,0,10"
+                       Foreground="{DynamicResource FgBrush}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}" Margin="0,0,0,10"
                        Text="Настройте текст, подпись ссылки и получателей. URL PR подставляется автоматически и здесь не редактируется."/>
 
             <Grid>
@@ -168,41 +168,41 @@
               </Grid.ColumnDefinitions>
 
               <StackPanel Grid.Column="0">
-                <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource PanelAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
                   <DockPanel>
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                       <TextBlock DockPanel.Dock="Left" Text="Текст сообщения" FontWeight="SemiBold" VerticalAlignment="Center"
-                                 Foreground="{StaticResource FgBrush}"/>
+                                 Foreground="{DynamicResource FgBrush}"/>
                       <TextBlock x:Name="TelegramCountText" DockPanel.Dock="Right" VerticalAlignment="Center"
-                                 Foreground="{StaticResource FgMutedBrush}"/>
+                                 Foreground="{DynamicResource FgMutedBrush}"/>
                       <Button x:Name="InsertTokenButton" Content="Вставить переменную" Click="OpenTokenMenu_Click"
                               Style="{StaticResource SecondaryButton}"
                               HorizontalAlignment="Left" Margin="12,0,0,0"/>
                     </DockPanel>
                     <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" Margin="0,6,0,0"
-                               Foreground="{StaticResource FgMutedBrush}"
+                               Foreground="{DynamicResource FgMutedBrush}"
                                Text="Переменные можно ставить в любое место. {link} — ссылка на PR, {tags} — получатели, {timeText} — текст по времени суток."/>
                     <TextBox x:Name="TelegramTemplateBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
                              VerticalScrollBarVisibility="Auto" TextChanged="AutoTemplate_Changed"/>
                   </DockPanel>
                 </Border>
 
-                <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource PanelAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
                   <StackPanel>
-                    <TextBlock Text="Текст ссылки на PR" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
+                    <TextBlock Text="Текст ссылки на PR" FontWeight="SemiBold" Foreground="{DynamicResource FgBrush}"/>
                     <TextBox x:Name="TelegramLinkCaptionBox" Margin="0,8,0,0" TextChanged="AutoTemplate_Changed"/>
-                    <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{StaticResource FgMutedBrush}"
+                    <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource FgMutedBrush}"
                                Text="Этот текст будет кликабельной ссылкой. Адрес PR приложение подставит само."/>
                   </StackPanel>
                 </Border>
 
-                <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource PanelAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
                   <StackPanel>
-                    <TextBlock Text="Получатели" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
-                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{StaticResource FgMutedBrush}"
+                    <TextBlock Text="Получатели" FontWeight="SemiBold" Foreground="{DynamicResource FgBrush}"/>
+                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{DynamicResource FgMutedBrush}"
                                Text="Формат: @username. Несколько имён — через пробел или запятую. Пустой список допустим."/>
                     <WrapPanel x:Name="RecipientHost" Margin="0,0,0,8"/>
                     <DockPanel>
@@ -212,27 +212,27 @@
                   </StackPanel>
                 </Border>
 
-                <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource PanelAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
                   <StackPanel>
-                    <TextBlock Text="Текст по времени" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
-                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{StaticResource FgMutedBrush}"
+                    <TextBlock Text="Текст по времени" FontWeight="SemiBold" Foreground="{DynamicResource FgBrush}"/>
+                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{DynamicResource FgMutedBrush}"
                                Text="Тег {timeText} заменяется текстом первого периода, в который попадает текущее время. Если период не найден, подставляется пустая строка. Конец периода не включается. Период через полночь, например 22:00–06:00, тоже учитывается."/>
-                    <TextBlock Text="Часовой пояс" Foreground="{StaticResource FgMutedBrush}"/>
+                    <TextBlock Text="Часовой пояс" Foreground="{DynamicResource FgMutedBrush}"/>
                     <ComboBox x:Name="TelegramTimeZoneBox" Margin="0,4,0,8" SelectionChanged="AutoTemplate_Changed"/>
                     <StackPanel x:Name="TelegramTimeTextsHost"/>
                     <Button Content="Добавить период" Click="AddTimeText_Click" Style="{StaticResource SecondaryButton}"
                             HorizontalAlignment="Left" Margin="0,4,0,0"/>
                     <TextBlock x:Name="TelegramTimeTextNow" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Foreground="{StaticResource FgInfoBrush}"/>
+                               Foreground="{DynamicResource FgInfoBrush}"/>
                   </StackPanel>
                 </Border>
 
-                <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource PanelAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="6" Padding="12" Visibility="Collapsed">
                   <StackPanel>
-                    <TextBlock Text="Свои переменные" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
-                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{StaticResource FgMutedBrush}"
+                    <TextBlock Text="Свои переменные" FontWeight="SemiBold" Foreground="{DynamicResource FgBrush}"/>
+                    <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{DynamicResource FgMutedBrush}"
                                Text="Дополнительный тег {имя} вставляется в текст. В значении можно оставить {link} — он раскроется один раз."/>
                     <DockPanel Margin="0,0,0,8">
                       <Button DockPanel.Dock="Right" Content="Добавить" Click="AddCustomTemplate_Click" Width="110" Margin="8,0,0,0"/>
@@ -244,18 +244,18 @@
               </StackPanel>
 
               <StackPanel Grid.Column="2">
-                <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                <Border Background="{DynamicResource PanelAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
                   <StackPanel>
-                    <TextBlock Text="Предпросмотр" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{StaticResource FgBrush}"/>
-                    <Border Background="{StaticResource PanelBrush}" CornerRadius="8" Padding="12">
+                    <TextBlock Text="Предпросмотр" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{DynamicResource FgBrush}"/>
+                    <Border Background="{DynamicResource PanelBrush}" CornerRadius="8" Padding="12">
                       <RichTextBox x:Name="TelegramPreviewBox" IsReadOnly="True" IsDocumentEnabled="True"
                                    BorderThickness="0" Background="Transparent"
-                                   Foreground="{StaticResource FgBrush}"
-                                   CaretBrush="{StaticResource FgBrush}" FontSize="13"
+                                   Foreground="{DynamicResource FgBrush}"
+                                   CaretBrush="{DynamicResource FgBrush}" FontSize="13"
                                    MinHeight="120" VerticalScrollBarVisibility="Auto"/>
                     </Border>
-                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource FgMutedBrush}"
+                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource FgMutedBrush}"
                                Text="Для {text} и адреса PR показаны примеры. Сообщение в Telegram не отправляется."/>
                   </StackPanel>
                 </Border>

@@ -5,8 +5,8 @@
         Height="640" Width="760"
         MinHeight="420" MinWidth="560"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}">
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource FgBrush}">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
       <Button Content="Черновик YAML" Click="Export_Click" Style="{StaticResource SecondaryButton}" Width="140"/>
@@ -15,7 +15,7 @@
     </StackPanel>
     <DockPanel>
       <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
-                 Foreground="{StaticResource FgMutedBrush}"
+                 Foreground="{DynamicResource FgMutedBrush}"
                  Text="Конфликты в файл mapping не записываются. Однозначные пары можно дописать, разные USE в одной папке остаются только в отчёте."/>
       <TextBox x:Name="ReportBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
                FontFamily="Consolas" FontSize="12" VerticalScrollBarVisibility="Auto"

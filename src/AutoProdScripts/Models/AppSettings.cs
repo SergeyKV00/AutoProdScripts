@@ -9,6 +9,7 @@ public sealed class AppSettings
     public string LastBaseBranch { get; set; } = "master";
     public string RemoteName { get; set; } = "origin";
     public bool IsConfigured { get; set; }
+    public string Theme { get; set; } = "Dark";
     public AzureAuthMode AuthMode { get; set; } = AzureAuthMode.Pat;
     public List<SavedReviewer> SavedReviewers { get; set; } = new();
 

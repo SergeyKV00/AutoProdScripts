@@ -1,3 +1,4 @@
+using AutoProdScripts.Themes;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -209,16 +210,9 @@ public partial class PullRequestReviewersDialog : Window
         DialogResult = true;
     }
 
-    private static SolidColorBrush InfoBrush() => Brush(0x9C, 0xDC, 0xFE);
-    private static SolidColorBrush WarnBrush() => Brush(0xDC, 0xDC, 0xAA);
-    private static SolidColorBrush ErrorBrush() => Brush(0xF4, 0x87, 0x71);
-
-    private static SolidColorBrush Brush(byte r, byte g, byte b)
-    {
-        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-        brush.Freeze();
-        return brush;
-    }
+    private static Brush InfoBrush() => ThemeService.Brush("FgInfoBrush");
+    private static Brush WarnBrush() => ThemeService.Brush("WarnBrush");
+    private static Brush ErrorBrush() => ThemeService.Brush("DangerBrush");
 
     private sealed class ReviewerRow : INotifyPropertyChanged
     {

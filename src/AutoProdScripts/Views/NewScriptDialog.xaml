@@ -6,8 +6,8 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}">
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource FgBrush}">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
       <Button x:Name="AutoButton" Content="Авто" MinWidth="90" Click="Auto_Click"/>
@@ -23,7 +23,7 @@
       <Label Content="Имя файла" Margin="0,12,0,0"/>
       <TextBox x:Name="FileNameBox" Text="FileName.sql"/>
       <TextBlock x:Name="AutoHint" Margin="0,10,0,0" TextWrapping="Wrap"
-                 Foreground="{StaticResource FgInfoBrush}"/>
+                 Foreground="{DynamicResource FgInfoBrush}"/>
     </StackPanel>
   </DockPanel>
 </Window>

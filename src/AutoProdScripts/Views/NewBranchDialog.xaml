@@ -4,8 +4,8 @@
         Title="Новая ветка"
         Height="260" Width="480"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}"
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource FgBrush}"
         ResizeMode="NoResize">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
@@ -21,7 +21,7 @@
                 ToolTip="baseBranch_yyyyMMddHHmm"/>
         <TextBox x:Name="BranchNameBox"/>
       </DockPanel>
-      <TextBlock Text="Авто: {baseBranch}_{yyyyMMddHHmm}" Foreground="{StaticResource FgMutedBrush}" Margin="0,6,0,0"/>
+      <TextBlock Text="Авто: {baseBranch}_{yyyyMMddHHmm}" Foreground="{DynamicResource FgMutedBrush}" Margin="0,6,0,0"/>
     </StackPanel>
   </DockPanel>
 </Window>

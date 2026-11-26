@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -41,12 +41,83 @@ public partial class MainWindow : Window
         BranchPopup.CustomPopupPlacementCallback = PlaceBranchPopupAbove;
         App.Log.Entries.CollectionChanged += (_, _) => RenderLog();
         RenderLog();
-        SqlEditor.SyntaxHighlighting = SqlHighlightingLoader.GetDefinition()
-                                       ?? HighlightingManager.Instance.GetDefinition("TSQL")
-                                       ?? HighlightingManager.Instance.GetDefinition("SQL");
+        ApplySqlHighlighting();
+        ThemeCombo.ItemsSource = ThemeOptions;
+        UpdateThemeMenu();
+        ThemeService.ThemeChanged += OnThemeChanged;
+        Closed += (_, _) => ThemeService.ThemeChanged -= OnThemeChanged;
         SqlEditor.TextChanged += SqlEditor_TextChanged;
         Loaded += async (_, _) => await OnLoadedAsync();
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+    }
+
+    private void ApplySqlHighlighting() =>
+        SqlEditor.SyntaxHighlighting = SqlHighlightingLoader.GetDefinition()
+                                       ?? HighlightingManager.Instance.GetDefinition("TSQL")
+                                       ?? HighlightingManager.Instance.GetDefinition("SQL");
+
+    private void UpdateThemeMenu()
+    {
+        ThemeDarkItem.IsChecked = ThemeService.Current == AppTheme.Dark;
+        ThemeLightItem.IsChecked = ThemeService.Current == AppTheme.Light;
+        ThemeGtaItem.IsChecked = ThemeService.Current == AppTheme.Gta6;
+        _suppressThemeCombo = true;
+        ThemeCombo.SelectedItem = ThemeOptions.First(o => o.Theme == ThemeService.Current);
+        _suppressThemeCombo = false;
+    }
+
+    private void SetTheme(AppTheme theme)
+    {
+        ThemeService.Apply(theme);
+        var settings = App.Settings.Current;
+        settings.Theme = theme.ToString();
+        App.Settings.Save(settings);
+        UpdateThemeMenu();
+    }
+
+    private sealed record ThemeOption(string Name, AppTheme Theme)
+    {
+        public override string ToString() => Name;
+    }
+
+    private static readonly ThemeOption[] ThemeOptions =
+    {
+        new("Тёмная", AppTheme.Dark),
+        new("Светлая", AppTheme.Light),
+        new("GTA VI · Vice City", AppTheme.Gta6)
+    };
+
+    private bool _suppressThemeCombo;
+
+    private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressThemeCombo || ThemeCombo.SelectedItem is not ThemeOption option)
+            return;
+
+        if (option.Theme != ThemeService.Current)
+            SetTheme(option.Theme);
+    }
+
+    private void ThemeDark_Click(object sender, RoutedEventArgs e) => SetTheme(AppTheme.Dark);
+    private void ThemeLight_Click(object sender, RoutedEventArgs e) => SetTheme(AppTheme.Light);
+    private void ThemeGta_Click(object sender, RoutedEventArgs e) => SetTheme(AppTheme.Gta6);
+
+    private void OnThemeChanged()
+    {
+        ApplySqlHighlighting();
+        UpdateTitle();
+        _renderedLogKey = null;
+        RenderLog();
+        SetStatus(StatusText.Text);
+        if (_git is not null)
+            _ = RefreshChangesAsync();
+    }
+
+    private void UpdateTitle()
+    {
+        var baseTitle = ThemeService.Text("AppTitle");
+        var path = App.Settings.Current.ProjectPath;
+        Title = _git is null || string.IsNullOrWhiteSpace(path) ? baseTitle : $"{baseTitle} — {path}";
     }
 
     private static CustomPopupPlacement[] PlaceBranchPopupAbove(Size popupSize, Size targetSize, Point offset) =>
@@ -137,7 +208,7 @@ public partial class MainWindow : Window
     {
         var path = App.Settings.Current.ProjectPath;
         _git = new GitCliService(path);
-        Title = $"AutoProdScripts — {path}";
+        UpdateTitle();
 
         if (!_git.IsGitAvailable(out var gitMsg))
         {
@@ -180,12 +251,12 @@ public partial class MainWindow : Window
     private static readonly Geometry FileIconData = Freeze(Geometry.Parse(
         "M3.2,1.3 H8.1 L11.8,5 V13.5 H3.2 Z M8.1,1.5 V5 H11.6"));
 
-    private static readonly Brush FolderIconBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xD7, 0xBA, 0x7D)));
-    private static readonly Brush FileIconBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x8F, 0xB8, 0xD4)));
-    private static readonly Brush StatusOkBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x3D, 0xDC, 0x97)));
-    private static readonly Brush StatusBusyBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7E, 0xB6, 0xFF)));
-    private static readonly Brush StatusWarnBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xF5, 0xC4, 0x51)));
-    private static readonly Brush StatusErrorBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B)));
+    private static Brush FolderIconBrush => ThemeService.Brush("FolderIconBrush");
+    private static Brush FileIconBrush => ThemeService.Brush("FileIconBrush");
+    private static Brush StatusOkBrush => ThemeService.Brush("SuccessBrush");
+    private static Brush StatusBusyBrush => ThemeService.Brush("FgInfoBrush");
+    private static Brush StatusWarnBrush => ThemeService.Brush("WarnBrush");
+    private static Brush StatusErrorBrush => ThemeService.Brush("DangerBrush");
     private static readonly Geometry UndoIconData = Freeze(Geometry.Parse(
         "M12.5,8 C9.85,8 7.45,8.99 5.6,10.6 L2,7 V16 H11 L7.38,12.38 C8.77,11.22 10.54,10.5 12.5,10.5 C16.04,10.5 19.05,12.81 20.1,16 L22.47,15.22 C21.08,11.03 17.15,8 12.5,8 Z"));
     private string? _renderedLogKey;
@@ -1035,10 +1106,10 @@ public partial class MainWindow : Window
         return null;
     }
 
-    private static readonly Brush AddedChangeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7D, 0xCE, 0xA0)));
-    private static readonly Brush ModifiedChangeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xD7, 0xBA, 0x7D)));
-    private static readonly Brush DeletedChangeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xE0, 0x7A, 0x7A)));
-    private static readonly Brush RenamedChangeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x8F, 0xB8, 0xD4)));
+    private static Brush AddedChangeBrush => ThemeService.Brush("ChangeAddedBrush");
+    private static Brush ModifiedChangeBrush => ThemeService.Brush("ChangeModifiedBrush");
+    private static Brush DeletedChangeBrush => ThemeService.Brush("ChangeDeletedBrush");
+    private static Brush RenamedChangeBrush => ThemeService.Brush("ChangeRenamedBrush");
 
     private static List<ChangeNode> BuildChangeTree(IReadOnlyList<GitStatusEntry> entries)
     {

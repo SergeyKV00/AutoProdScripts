@@ -18,6 +18,7 @@ public partial class App : Application
             new RoutedEventHandler(OnWindowLoaded));
         base.OnStartup(e);
         Settings.Load();
+        ThemeService.Apply(ThemeService.Parse(Settings.Current.Theme));
         _ = SqlHighlightingLoader.GetDefinition();
         Log.Info("Приложение запущено.");
     }

@@ -5,8 +5,8 @@
         Height="320" Width="560"
         MinHeight="280"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}"
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource FgBrush}"
         ResizeMode="CanResizeWithGrip"
         PreviewKeyDown="Window_PreviewKeyDown">
   <DockPanel Margin="16">
@@ -20,22 +20,22 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"
-                   Foreground="{StaticResource FgBrush}"/>
+                   Foreground="{DynamicResource FgBrush}"/>
         <TextBlock x:Name="StatusText" Margin="0,8,0,0" TextWrapping="Wrap"
-                   Foreground="{StaticResource FgBrush}"/>
+                   Foreground="{DynamicResource FgBrush}"/>
         <Label Content="Ссылка:" Margin="0,16,0,0"/>
         <TextBox x:Name="UrlBox" IsReadOnly="True" TextWrapping="Wrap" Height="52"/>
 
         <StackPanel x:Name="TelegramPanel" Visibility="Collapsed" Margin="0,16,0,0">
-          <TextBlock Text="Сообщение для Telegram" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
+          <TextBlock Text="Сообщение для Telegram" FontWeight="SemiBold" Foreground="{DynamicResource FgBrush}"/>
           <RichTextBox x:Name="TelegramMessageBox" Margin="0,8,0,0" Height="120"
                        IsDocumentEnabled="True"
-                       Background="{StaticResource InputBrush}"
-                       Foreground="{StaticResource FgBrush}"
-                       CaretBrush="{StaticResource FgBrush}"
-                       BorderBrush="#555555"
+                       Background="{DynamicResource InputBrush}"
+                       Foreground="{DynamicResource FgBrush}"
+                       CaretBrush="{DynamicResource FgBrush}"
+                       BorderBrush="{DynamicResource BorderBrush}"
                        DataObject.Copying="TelegramMessageBox_Copying"/>
-          <TextBlock Text="Ctrl+K — задать свой текст ссылки" Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,0"/>
+          <TextBlock Text="Ctrl+K — задать свой текст ссылки" Foreground="{DynamicResource FgMutedBrush}" Margin="0,4,0,0"/>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

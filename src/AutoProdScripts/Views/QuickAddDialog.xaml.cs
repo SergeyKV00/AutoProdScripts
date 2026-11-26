@@ -14,9 +14,9 @@ namespace AutoProdScripts.Views;
 
 public partial class QuickAddDialog : Window
 {
-    private static readonly Brush OkBrush = Freeze(Color.FromRgb(0x7D, 0xCE, 0xA0));
-    private static readonly Brush WarnBrush = Freeze(Color.FromRgb(0xD7, 0xBA, 0x7D));
-    private static readonly Brush ErrorBrush = Freeze(Color.FromRgb(0xE0, 0x7A, 0x7A));
+    private static Brush OkBrush => ThemeService.Brush("ChangeAddedBrush");
+    private static Brush WarnBrush => ThemeService.Brush("ChangeModifiedBrush");
+    private static Brush ErrorBrush => ThemeService.Brush("ChangeDeletedBrush");
 
     private readonly UseFolderMapping _mapping;
     private readonly string _projectRoot;

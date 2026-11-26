@@ -23,16 +23,19 @@ public static class WindowTheme
         if (hwnd == IntPtr.Zero)
             return;
 
-        var dark = 1;
+        var dark = ThemeService.Current == AppTheme.Light ? 0 : 1;
         _ = DwmSetWindowAttribute(hwnd, UseImmersiveDarkMode, ref dark, sizeof(int));
 
-        var caption = ToColorRef(0x10, 0x1C, 0x2E);
-        var text = ToColorRef(0xD6, 0xE2, 0xF0);
-        var border = ToColorRef(0x24, 0x36, 0x4C);
+        var caption = ToColorRef(Resolve("PanelBrush"));
+        var text = ToColorRef(Resolve("FgBrush"));
+        var border = ToColorRef(Resolve("BorderBrush"));
         _ = DwmSetWindowAttribute(hwnd, CaptionColor, ref caption, sizeof(int));
         _ = DwmSetWindowAttribute(hwnd, TextColor, ref text, sizeof(int));
         _ = DwmSetWindowAttribute(hwnd, BorderColor, ref border, sizeof(int));
     }
+
+    private static Color Resolve(string key) =>
+        ThemeService.Brush(key) is SolidColorBrush brush ? brush.Color : Colors.Black;
 
     private static ImageSource Icon()
     {
@@ -49,7 +52,7 @@ public static class WindowTheme
         return _icon;
     }
 
-    private static int ToColorRef(int red, int green, int blue) => red | (green << 8) | (blue << 16);
+    private static int ToColorRef(Color c) => c.R | (c.G << 8) | (c.B << 16);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);

@@ -6,8 +6,8 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="{StaticResource BgBrush}"
-        Foreground="{StaticResource FgBrush}">
+        Background="{DynamicResource BgBrush}"
+        Foreground="{DynamicResource FgBrush}">
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
       <Button Content="Отмена" IsCancel="True" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Width="100"/>
