@@ -23,6 +23,8 @@ public sealed class AppSettings
     public List<TelegramTimeTextRule> TelegramTimeTexts { get; set; } = new();
     public List<TelegramCustomTemplate> TelegramCustomTemplates { get; set; } = new();
     public List<SavedReviewer> AutoReviewers { get; set; } = new();
+    public bool AutoCompletePullRequest { get; set; }
+    public List<LinkTemplateRule> LinkTemplates { get; set; } = new();
 }
 
 public sealed class TelegramTimeTextRule

@@ -58,4 +58,5 @@ public sealed record PullRequestResult(
     int? PullRequestId,
     string? Url,
     string Message,
-    string? Title = null);
+    string? Title = null,
+    string? CreatedById = null);
