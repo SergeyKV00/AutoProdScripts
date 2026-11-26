@@ -1,7 +1,15 @@
 namespace AutoProdScripts.Core.Library;
 
-/// <summary>Скрипт вместе с тем, куда он подключается (имя подключения и база на этом ПК).</summary>
-public sealed record LibraryEntry(LibraryScript Script, string ConnectionName, string Database);
+/// <summary>
+/// Скрипт или цепочка вместе с тем, куда подключается на этом ПК. <paramref name="Body"/> — текст SQL,
+/// <paramref name="Labels"/> — подписи параметров и прочие названия.
+/// </summary>
+public sealed record LibraryEntry(
+    LibraryItem Item,
+    IReadOnlyList<string> Connections,
+    IReadOnlyList<string> Databases,
+    string Body,
+    string Labels = "");
 
 public static class LibrarySearch
 {
@@ -19,12 +27,12 @@ public static class LibrarySearch
 
         return entries
             .Where(e => connectionName is null
-                        || string.Equals(e.ConnectionName, connectionName, StringComparison.CurrentCultureIgnoreCase))
-            .Where(e => tag is null || e.Script.Tags.Contains(tag, StringComparer.CurrentCultureIgnoreCase))
+                        || e.Connections.Contains(connectionName, StringComparer.CurrentCultureIgnoreCase))
+            .Where(e => tag is null || e.Item.Tags.Contains(tag, StringComparer.CurrentCultureIgnoreCase))
             .Select(e => (Entry: e, Rank: Rank(e, words)))
             .Where(x => x.Rank >= 0)
             .OrderBy(x => x.Rank)
-            .ThenBy(x => x.Entry.Script.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(x => x.Entry.Item.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(x => x.Entry)
             .ToList();
     }
@@ -34,18 +42,18 @@ public static class LibrarySearch
         if (words.Length == 0)
             return 0;
 
-        var script = entry.Script;
-        var name = Normalize(script.Name);
+        var item = entry.Item;
+        var name = Normalize(item.Name);
         if (words.All(name.Contains))
             return 0;
 
         var properties = Normalize(string.Join('\n',
-            script.Name, script.Description, script.Group, string.Join('\n', script.Tags),
-            entry.ConnectionName, entry.Database, string.Join('\n', script.Parameters.Select(p => p.Label))));
+            item.Name, item.Description, item.Group, string.Join('\n', item.Tags),
+            string.Join('\n', entry.Connections), string.Join('\n', entry.Databases), entry.Labels));
         if (words.All(properties.Contains))
             return 1;
 
-        var everything = properties + "\n" + Normalize(script.Sql);
+        var everything = properties + "\n" + Normalize(entry.Body);
         return words.All(everything.Contains) ? 2 : -1;
     }
 

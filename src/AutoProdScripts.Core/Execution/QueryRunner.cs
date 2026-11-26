@@ -1,4 +1,6 @@
 using System.Data;
+using System.Data.Common;
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 using AutoProdScripts.Core.Sql;
 using Microsoft.Data.SqlClient;
@@ -12,9 +14,22 @@ public sealed class QueryRequest
     public IReadOnlyList<SqlParameterValue> Parameters { get; init; } = [];
     public int MaxRows { get; init; } = 10_000;
     public int CommandTimeoutSeconds { get; init; } = 60;
+
+    /// <summary>Временные таблицы, которые нужно создать и заполнить перед скриптом.</summary>
+    public IReadOnlyList<InputTable> InputTables { get; init; } = [];
 }
 
-public sealed record QueryResultSet(IReadOnlyList<string> Columns, IReadOnlyList<object?[]> Rows, bool Truncated);
+public sealed record InputTable(
+    string Name,
+    IReadOnlyList<string> Columns,
+    IReadOnlyList<SqlColumnType?> Types,
+    IReadOnlyList<object?[]> Rows);
+
+public sealed record QueryResultSet(
+    IReadOnlyList<string> Columns,
+    IReadOnlyList<object?[]> Rows,
+    bool Truncated,
+    IReadOnlyList<SqlColumnType?>? Types = null);
 
 public sealed record QueryResult(
     IReadOnlyList<QueryResultSet> ResultSets,
@@ -35,8 +50,12 @@ public sealed class ReadOnlyViolationException(IReadOnlyList<SqlViolation> viola
 /// Выполняет скрипт в транзакции, которая всегда откатывается. Проверку «только чтение»
 /// делает сам, чтобы её нельзя было обойти со стороны вызывающего кода.
 /// </summary>
-public static class QueryRunner
+public static partial class QueryRunner
 {
+    [GeneratedRegex(@"^#[\p{L}_][\p{L}\p{N}_]{0,100}$")]
+    private static partial Regex TableNamePattern();
+
+    public static bool IsValidTableName(string name) => TableNamePattern().IsMatch(name);
     public static async Task<QueryResult> RunAsync(QueryRequest request, CancellationToken cancellationToken)
     {
         var analysis = ReadOnlyValidator.Analyze(request.Sql);
@@ -47,6 +66,9 @@ public static class QueryRunner
         var missing = analysis.Parameters.Where(p => !values.ContainsKey(p)).ToList();
         if (missing.Count > 0)
             throw new InvalidOperationException($"Не заданы параметры: {string.Join(", ", missing)}.");
+
+        foreach (var table in request.InputTables)
+            CheckInputTable(table);
 
         // Преобразуем значения до подключения, чтобы ошибка ввода не стоила похода на сервер.
         foreach (var value in values.Values)
@@ -70,6 +92,9 @@ public static class QueryRunner
                 IsolationLevel.ReadCommitted, cancellationToken);
             try
             {
+                foreach (var table in request.InputTables)
+                    await LoadTableAsync(connection, transaction, table, request.CommandTimeoutSeconds, cancellationToken);
+
                 foreach (var batch in analysis.Batches)
                 {
                     var truncated = await RunBatchAsync(
@@ -100,6 +125,57 @@ public static class QueryRunner
         return new QueryResult(resultSets, messages, error, watch.Elapsed);
     }
 
+    private static void CheckInputTable(InputTable table)
+    {
+        if (!IsValidTableName(table.Name))
+            throw new InvalidOperationException($"Недопустимое имя временной таблицы: {table.Name}.");
+        if (table.Columns.Count == 0)
+            throw new InvalidOperationException($"{table.Name}: нет колонок.");
+        if (table.Columns.Distinct(StringComparer.OrdinalIgnoreCase).Count() != table.Columns.Count)
+            throw new InvalidOperationException($"{table.Name}: в результате есть колонки с одинаковыми именами.");
+        for (var i = 0; i < table.Columns.Count; i++)
+        {
+            if (i >= table.Types.Count || table.Types[i] is null)
+                throw new InvalidOperationException($"{table.Name}: колонку {table.Columns[i]} этого типа передать нельзя.");
+        }
+    }
+
+    // Пишет только во временную таблицу своей сессии: имя проверено, транзакция потом откатывается.
+    private static async Task LoadTableAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        InputTable table,
+        int timeout,
+        CancellationToken cancellationToken)
+    {
+        var columns = table.Columns.Select((name, i) => $"[{name.Replace("]", "]]")}] {table.Types[i]!.Declaration} NULL");
+        await using (var create = new SqlCommand(
+                         $"CREATE TABLE {table.Name} ({string.Join(", ", columns)})", connection, transaction))
+        {
+            create.CommandTimeout = timeout;
+            await create.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        using var data = new DataTable();
+        for (var i = 0; i < table.Columns.Count; i++)
+        {
+            var type = table.Rows.Select(r => r[i]).FirstOrDefault(v => v is not null)?.GetType() ?? typeof(string);
+            data.Columns.Add($"c{i}", type);
+        }
+
+        foreach (var row in table.Rows)
+            data.Rows.Add(row.Select(v => v ?? DBNull.Value).ToArray());
+
+        using var copy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+        {
+            DestinationTableName = table.Name,
+            BulkCopyTimeout = timeout
+        };
+        for (var i = 0; i < table.Columns.Count; i++)
+            copy.ColumnMappings.Add(i, i);
+        await copy.WriteToServerAsync(data, cancellationToken);
+    }
+
     private static async Task<bool> RunBatchAsync(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -127,6 +203,7 @@ public static class QueryRunner
             var columns = Enumerable.Range(0, reader.FieldCount)
                 .Select(i => string.IsNullOrEmpty(reader.GetName(i)) ? $"(столбец {i + 1})" : reader.GetName(i))
                 .ToList();
+            var types = reader.GetColumnSchema().Select(SqlColumnType.From).ToList();
             var rows = new List<object?[]>();
             var truncated = false;
 
@@ -141,7 +218,7 @@ public static class QueryRunner
                 rows.Add(ReadRow(reader));
             }
 
-            resultSets.Add(new QueryResultSet(columns, rows, truncated));
+            resultSets.Add(new QueryResultSet(columns, rows, truncated, types));
             if (truncated)
             {
                 // Без отмены закрытие reader дочитало бы всю выборку с сервера.

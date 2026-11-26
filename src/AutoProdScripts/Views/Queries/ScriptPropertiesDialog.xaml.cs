@@ -69,11 +69,7 @@ public partial class ScriptPropertiesDialog : Window
         foreach (var parameter in _script.Parameters)
         {
             var label = new TextBox { Text = parameter.Label };
-            var kind = new ComboBox
-            {
-                ItemsSource = ParameterKinds.Titles,
-                SelectedIndex = ParameterKinds.IndexOf(parameter.Kind)
-            };
+            var kind = ParameterKinds.Combo(parameter.Kind);
             var value = new TextBox { Text = parameter.DefaultValue ?? string.Empty };
             var name = new TextBlock { Text = parameter.Name, VerticalAlignment = VerticalAlignment.Center };
             ParametersHost.Children.Add(Row(name, label, kind, value));
@@ -91,7 +87,7 @@ public partial class ScriptPropertiesDialog : Window
     private static Grid Row(params FrameworkElement[] cells)
     {
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-        double[] widths = [1, 1.3, 1.5, 1.2];
+        double[] widths = [0.9, 1.2, 1.8, 1];
         for (var i = 0; i < cells.Length; i++)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(widths[i], GridUnitType.Star) });

@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using AutoProdScripts.Core.Connections;
 using AutoProdScripts.Core.Library;
+using AutoProdScripts.Core.Sql;
 
 namespace AutoProdScripts.Views.Queries;
 
@@ -29,6 +30,9 @@ public partial class LibraryPanel : UserControl
     public event Action<Guid>? OpenRequested;
     public event Action<Guid>? PropertiesRequested;
     public event Action<Guid>? DeleteRequested;
+    public event Action? NewChainRequested;
+
+    private void NewChain_Click(object sender, RoutedEventArgs e) => NewChainRequested?.Invoke();
 
     public void Initialize()
     {
@@ -52,10 +56,9 @@ public partial class LibraryPanel : UserControl
     private void Reload()
     {
         _loading = true;
-        var scripts = App.Library.GetAll();
-        FillFilter(ConnectionFilter, "Все подключения",
-            Entries(scripts).Select(e => e.ConnectionName).Where(n => n.Length > 0));
-        FillFilter(TagFilter, "Все теги", scripts.SelectMany(s => s.Tags));
+        var entries = Entries();
+        FillFilter(ConnectionFilter, "Все подключения", entries.SelectMany(e => e.Connections));
+        FillFilter(TagFilter, "Все теги", entries.SelectMany(e => e.Item.Tags));
         _loading = false;
         Rebuild();
     }
@@ -76,15 +79,43 @@ public partial class LibraryPanel : UserControl
         }
     }
 
-    private static IEnumerable<LibraryEntry> Entries(IEnumerable<LibraryScript> scripts)
+    private static List<LibraryEntry> Entries()
     {
         var connections = App.Connections.GetAll();
-        return scripts.Select(script =>
+        var scripts = App.Library.GetAll();
+        var entries = scripts.Select(script =>
         {
             var profile = ScriptConnection.Resolve(script, connections);
-            return new LibraryEntry(script, profile?.Name ?? script.ConnectionName, profile?.Database ?? string.Empty);
+            return new LibraryEntry(
+                script,
+                Named(profile?.Name ?? script.ConnectionName),
+                Named(profile?.Database),
+                script.Sql,
+                string.Join('\n', script.Parameters.Select(p => p.Label)));
         }).ToList();
+
+        var byId = scripts.ToDictionary(s => s.Id);
+        entries.AddRange(App.Library.GetChains().Select(chain =>
+        {
+            var steps = chain.Steps
+                .Select(s => (Step: s, Script: s.Inline ?? byId.GetValueOrDefault(s.ScriptId)))
+                .Where(x => x.Script is not null)
+                .Select(x => (x.Step, Script: x.Script!))
+                .ToList();
+            var profiles = steps.Select(x =>
+                ScriptConnection.Resolve(x.Step.ConnectionId, x.Step.ConnectionName, connections)
+                ?? ScriptConnection.Resolve(x.Script, connections)).OfType<DbConnectionProfile>().ToList();
+            return new LibraryEntry(
+                chain,
+                profiles.Select(p => p.Name).Distinct().ToList(),
+                profiles.Select(p => p.Database).Distinct().ToList(),
+                string.Join('\n', steps.Select(x => x.Script.Sql)),
+                string.Join('\n', steps.Select(x => x.Script.Name).Concat(chain.Parameters.Select(p => p.Label))));
+        }));
+        return entries;
     }
+
+    private static string[] Named(string? value) => string.IsNullOrEmpty(value) ? [] : [value];
 
     private void Filter_Changed(object sender, RoutedEventArgs e)
     {
@@ -99,19 +130,19 @@ public partial class LibraryPanel : UserControl
             return;
 
         var library = App.Library;
-        var scripts = library.GetAll();
+        var all = Entries();
         var found = LibrarySearch.Find(
-            Entries(scripts),
+            all,
             SearchBox.Text,
             (ConnectionFilter.SelectedItem as ComboBoxItem)?.Tag as string,
             (TagFilter.SelectedItem as ComboBoxItem)?.Tag as string);
 
         var view = ViewBox.SelectedIndex;
         if (view == ViewFavorites)
-            found = found.Where(e => library.IsFavorite(e.Script.Id)).ToList();
+            found = found.Where(e => library.IsFavorite(e.Item.Id)).ToList();
         else if (view == ViewRecent)
-            found = found.Where(e => library.LastRun(e.Script.Id) is not null)
-                .OrderByDescending(e => library.LastRun(e.Script.Id))
+            found = found.Where(e => library.LastRun(e.Item.Id) is not null)
+                .OrderByDescending(e => library.LastRun(e.Item.Id))
                 .Take(RecentLimit)
                 .ToList();
 
@@ -121,7 +152,7 @@ public partial class LibraryPanel : UserControl
         var groups = new Dictionary<string, TreeViewItem>(StringComparer.CurrentCultureIgnoreCase);
         if (grouped)
         {
-            foreach (var path in found.Select(e => e.Script.Group).Where(g => g.Length > 0)
+            foreach (var path in found.Select(e => e.Item.Group).Where(g => g.Length > 0)
                          .Distinct(StringComparer.CurrentCultureIgnoreCase)
                          .Order(StringComparer.CurrentCultureIgnoreCase))
                 GroupNode(path, groups);
@@ -129,13 +160,13 @@ public partial class LibraryPanel : UserControl
 
         foreach (var entry in found)
         {
-            var target = grouped && entry.Script.Group.Length > 0
-                ? GroupNode(entry.Script.Group, groups).Items
+            var target = grouped && entry.Item.Group.Length > 0
+                ? GroupNode(entry.Item.Group, groups).Items
                 : Tree.Items;
-            target.Add(ScriptNode(entry, showGroup: !grouped));
+            target.Add(ItemNode(entry, showGroup: !grouped));
         }
 
-        EmptyText.Text = scripts.Count == 0
+        EmptyText.Text = all.Count == 0
             ? "Пока пусто. Напишите запрос и нажмите «Сохранить»."
             : found.Count == 0 ? "Ничего не найдено." : string.Empty;
     }
@@ -150,7 +181,8 @@ public partial class LibraryPanel : UserControl
         var node = new TreeViewItem
         {
             Header = Row("📁 " + path[(slash + 1)..]),
-            IsExpanded = !_collapsed.Contains(path)
+            IsExpanded = !_collapsed.Contains(path),
+            Tag = path
         };
         node.Collapsed += (_, e) =>
         {
@@ -174,21 +206,22 @@ public partial class LibraryPanel : UserControl
         return row;
     }
 
-    private TreeViewItem ScriptNode(LibraryEntry entry, bool showGroup)
+    private TreeViewItem ItemNode(LibraryEntry entry, bool showGroup)
     {
-        var script = entry.Script;
-        var star = App.Library.IsFavorite(script.Id) ? "★ " : string.Empty;
-        var group = showGroup && script.Group.Length > 0 ? $"  · {script.Group}" : string.Empty;
+        var item = entry.Item;
+        var chain = item is LibraryChain ? "🔗 " : string.Empty;
+        var star = App.Library.IsFavorite(item.Id) ? "★ " : string.Empty;
+        var group = showGroup && item.Group.Length > 0 ? $"  · {item.Group}" : string.Empty;
         var tooltip = string.Join(Environment.NewLine, new[]
         {
-            script.Description,
-            entry.ConnectionName.Length > 0 ? "Подключение: " + entry.ConnectionName : string.Empty,
-            script.Tags.Count > 0 ? "Теги: " + string.Join(", ", script.Tags) : string.Empty
+            item.Description,
+            entry.Connections.Count > 0 ? "Подключения: " + string.Join(", ", entry.Connections) : string.Empty,
+            item.Tags.Count > 0 ? "Теги: " + string.Join(", ", item.Tags) : string.Empty
         }.Where(line => line.Length > 0));
 
-        var row = Row(star + script.Name + group);
-        // Обработчик на самой строке: не нужно искать скрипт по элементу под курсором.
-        var id = script.Id;
+        var row = Row(star + chain + item.Name + group);
+        // Обработчик на самой строке: не нужно искать запись по элементу под курсором.
+        var id = item.Id;
         row.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
@@ -199,9 +232,9 @@ public partial class LibraryPanel : UserControl
         return new TreeViewItem
         {
             Header = row,
-            Tag = script.Id,
+            Tag = id,
             ToolTip = tooltip.Length > 0 ? tooltip : null,
-            IsSelected = script.Id == _selected
+            IsSelected = id == _selected
         };
     }
 
@@ -231,14 +264,20 @@ public partial class LibraryPanel : UserControl
 
     private void Tree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        // Меню относится только к скриптам, не к группам и пустому месту.
-        if (CurrentId is not { } id)
+        // У группы — только экспорт; на пустом месте меню нет.
+        var id = CurrentId;
+        if (id is null && CurrentGroup is null)
         {
             e.Handled = true;
             return;
         }
 
-        FavoriteItem.Header = App.Library.IsFavorite(id) ? "Убрать из избранного" : "В избранное";
+        foreach (var item in new FrameworkElement[]
+                     { OpenMenu, PropertiesMenu, FavoriteItem, DuplicateMenu, ExportMenu, DeleteSeparator, DeleteMenu })
+            item.Visibility = id is null ? Visibility.Collapsed : Visibility.Visible;
+        ExportGroupMenu.Visibility = id is null ? Visibility.Visible : Visibility.Collapsed;
+        if (id is { } selected)
+            FavoriteItem.Header = App.Library.IsFavorite(selected) ? "Убрать из избранного" : "В избранное";
     }
 
     private void Open_Click(object sender, RoutedEventArgs e) => WithSelected(id => OpenRequested?.Invoke(id));
@@ -250,7 +289,13 @@ public partial class LibraryPanel : UserControl
     private void Favorite_Click(object sender, RoutedEventArgs e) =>
         WithSelected(id => App.Library.SetFavorite(id, !App.Library.IsFavorite(id)));
 
-    private void Duplicate_Click(object sender, RoutedEventArgs e) => WithSelected(id => App.Library.Duplicate(id));
+    private void Duplicate_Click(object sender, RoutedEventArgs e) => WithSelected(id =>
+    {
+        if (App.Library.FindChain(id) is not null)
+            App.Library.DuplicateChain(id);
+        else
+            App.Library.Duplicate(id);
+    });
 
     private void WithSelected(Action<Guid> action)
     {
@@ -270,7 +315,11 @@ public partial class LibraryPanel : UserControl
 internal static class ScriptConnection
 {
     public static DbConnectionProfile? Resolve(LibraryScript script, IReadOnlyList<DbConnectionProfile> connections) =>
-        connections.FirstOrDefault(c => c.Id == script.ConnectionId)
-        ?? connections.FirstOrDefault(c => script.ConnectionName.Length > 0
-                                           && string.Equals(c.Name, script.ConnectionName, StringComparison.OrdinalIgnoreCase));
+        Resolve(script.ConnectionId, script.ConnectionName, connections);
+
+    /// <summary>По Id, а для перенесённых с другого ПК — по имени.</summary>
+    public static DbConnectionProfile? Resolve(Guid? id, string name, IReadOnlyList<DbConnectionProfile> connections) =>
+        connections.FirstOrDefault(c => c.Id == id)
+        ?? connections.FirstOrDefault(c => name.Length > 0
+                                           && string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
 }

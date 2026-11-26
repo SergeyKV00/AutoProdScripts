@@ -1,11 +1,7 @@
 using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Input;
 using System.Windows.Threading;
 using AutoProdScripts.Core.Connections;
 using AutoProdScripts.Core.Execution;
@@ -28,9 +24,14 @@ public partial class QueriesView : UserControl
     public QueriesView()
     {
         InitializeComponent();
-        Library.OpenRequested += OpenScript;
-        Library.PropertiesRequested += ShowProperties;
-        Library.DeleteRequested += DeleteScript;
+        Library.OpenRequested += OpenItem;
+        Library.PropertiesRequested += ShowItemProperties;
+        Library.DeleteRequested += DeleteItem;
+        Library.NewChainRequested += NewChain;
+        Library.ImportRequested += ImportFile;
+        Library.BeforeExport = ConfirmDiscard;
+        Chain.NewScriptRequested += () => NewScript();
+        Chain.BusyChanged += busy => Library.IsEnabled = !busy;
         _checkTimer.Tick += (_, _) => CheckScript();
         Editor.TextChanged += (_, _) =>
         {
@@ -49,15 +50,21 @@ public partial class QueriesView : UserControl
             ApplyHighlighting();
             ThemeService.ThemeChanged += ApplyHighlighting;
             App.Connections.Changed += ReloadConnections;
+            App.Connections.Changed += () =>
+            {
+                if (InChain)
+                    Chain.Reload();
+            };
             ReloadConnections();
             Library.Initialize();
             UpdateHeader();
             CheckScript();
             if (App.Connections.LoadError is { } error)
-                SummaryText.Text = error;
+                Results.Summary = error;
         }
 
-        Editor.Focus();
+        if (!InChain)
+            Editor.Focus();
     }
 
     public void CancelRunning() => _running?.Cancel();
@@ -162,6 +169,12 @@ public partial class QueriesView : UserControl
 
     public async Task RunAsync()
     {
+        if (InChain)
+        {
+            await Chain.RunAsync();
+            return;
+        }
+
         if (_running is not null)
             return;
 
@@ -170,7 +183,7 @@ public partial class QueriesView : UserControl
         var sql = selection ? Editor.SelectedText : Editor.Text;
         if (SelectedConnection is not { } profile)
         {
-            ShowFailure(ConnectionBox.Items.Count == 0
+            Results.ShowFailure(ConnectionBox.Items.Count == 0
                 ? "Сначала добавьте подключение (кнопка «Подключения…»)."
                 : "Выберите подключение.");
             return;
@@ -179,29 +192,29 @@ public partial class QueriesView : UserControl
         var analysis = ReadOnlyValidator.Analyze(sql);
         if (!analysis.IsAllowed)
         {
-            ShowFailure("Скрипт не выполнен: он не прошёл проверку «только чтение»."
+            Results.ShowFailure("Скрипт не выполнен: он не прошёл проверку «только чтение»."
                         + Environment.NewLine + string.Join(Environment.NewLine, analysis.Violations));
             return;
         }
 
         if (!int.TryParse(MaxRowsBox.Text.Trim(), out var maxRows) || maxRows <= 0)
         {
-            ShowFailure("Лимит строк должен быть положительным числом.");
+            Results.ShowFailure("Лимит строк должен быть положительным числом.");
             return;
         }
 
         var password = profile.AuthMode == DbAuthMode.SqlLogin ? App.Connections.LoadPassword(profile.Id) : null;
         if (profile.AuthMode == DbAuthMode.SqlLogin && password is null)
         {
-            ShowFailure("Для этого подключения не сохранён пароль.");
+            Results.ShowFailure("Для этого подключения не сохранён пароль.");
             return;
         }
 
         var source = _running = new CancellationTokenSource();
         var scriptId = _current?.Id;
         SetBusy(true);
-        ClearResults();
-        SummaryText.Text = selection ? "Выполняется выделенный фрагмент…" : "Выполняется…";
+        Results.Clear();
+        Results.Summary = selection ? "Выполняется выделенный фрагмент…" : "Выполняется…";
         try
         {
             var request = new QueryRequest
@@ -223,18 +236,18 @@ public partial class QueriesView : UserControl
             if (scriptId is { } id)
                 MarkRun(id);
             App.Log.Info(result.Success
-                ? $"Запрос выполнен за {Seconds(result.Elapsed)}."
-                : $"Запрос завершился ошибкой за {Seconds(result.Elapsed)}.");
+                ? $"Запрос выполнен за {ResultsPanel.Seconds(result.Elapsed)}."
+                : $"Запрос завершился ошибкой за {ResultsPanel.Seconds(result.Elapsed)}.");
         }
         catch (OperationCanceledException)
         {
-            ShowFailure("Выполнение отменено.");
+            Results.ShowFailure("Выполнение отменено.");
             App.Log.Info("Запрос отменён.");
         }
         catch (Exception ex)
         {
             // Любой сбой запуска показываем в «Сообщениях», а не роняем приложение.
-            ShowFailure(ex.Message);
+            Results.ShowFailure(ex.Message);
             App.Log.Warn("Запрос не выполнен.");
         }
         finally
@@ -244,8 +257,6 @@ public partial class QueriesView : UserControl
             SetBusy(false);
         }
     }
-
-    private static string Seconds(TimeSpan elapsed) => elapsed.TotalSeconds.ToString("0.00", CultureInfo.CurrentCulture) + " с";
 
     private void SetBusy(bool busy)
     {
@@ -260,147 +271,21 @@ public partial class QueriesView : UserControl
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _running?.Cancel();
 
-    private void ClearResults()
-    {
-        while (ResultTabs.Items.Count > 1)
-            ResultTabs.Items.RemoveAt(0);
-        MessagesBox.Clear();
-        ResultTabs.SelectedItem = MessagesTab;
-        UpdateResultButtons();
-    }
-
-    private void ShowFailure(string message)
-    {
-        ClearResults();
-        SummaryText.Text = "Не выполнено — подробности в «Сообщениях».";
-        MessagesBox.Text = message;
-    }
-
     private void ShowResult(QueryResult result, bool selection)
     {
-        for (var i = 0; i < result.ResultSets.Count; i++)
-        {
-            var set = result.ResultSets[i];
-            ResultTabs.Items.Insert(i, new TabItem
-            {
-                Header = $"Результат {i + 1} ({set.Rows.Count}{(set.Truncated ? "+" : "")})",
-                Content = CreateGrid(set),
-                Tag = set
-            });
-        }
-
         var messages = new List<string>();
         if (result.Error is not null)
             messages.Add(result.Error);
         messages.AddRange(result.Messages);
-        if (messages.Count == 0)
-            messages.Add("Выполнено без сообщений.");
-        MessagesBox.Text = string.Join(Environment.NewLine, messages);
 
         var rows = result.ResultSets.Sum(s => s.Rows.Count);
-        SummaryText.Text = (result.Success ? "Выполнено" : "Ошибка — подробности в «Сообщениях»")
-                           + (selection ? " (выделенный фрагмент)" : "")
-                           + $" · строк: {rows} · {Seconds(result.Elapsed)}"
-                           + (result.ResultSets.Any(s => s.Truncated) ? " · показаны не все строки" : "");
-
-        ResultTabs.SelectedIndex = result.Success && result.ResultSets.Count > 0 ? 0 : ResultTabs.Items.Count - 1;
-        UpdateResultButtons();
-    }
-
-    private static DataGrid CreateGrid(QueryResultSet set)
-    {
-        var grid = new DataGrid
-        {
-            AutoGenerateColumns = false,
-            IsReadOnly = true,
-            CanUserSortColumns = false,
-            CanUserAddRows = false,
-            CanUserDeleteRows = false,
-            EnableColumnVirtualization = true,
-            SelectionUnit = DataGridSelectionUnit.CellOrRowHeader,
-            ClipboardCopyMode = DataGridClipboardCopyMode.IncludeHeader
-        };
-        // Через шаблон, иначе «_» в имени колонки съедается как горячая клавиша.
-        var text = new FrameworkElementFactory(typeof(TextBlock));
-        text.SetBinding(TextBlock.TextProperty, new Binding());
-        var header = new DataTemplate { VisualTree = text };
-
-        for (var i = 0; i < set.Columns.Count; i++)
-        {
-            grid.Columns.Add(new DataGridTextColumn
-            {
-                Header = set.Columns[i],
-                HeaderTemplate = header,
-                Binding = new Binding($"[{i}]") { Mode = BindingMode.OneWay, Converter = CellConverter.Instance },
-                MaxWidth = 500
-            });
-        }
-
-        grid.ItemsSource = set.Rows;
-        return grid;
-    }
-
-    private (QueryResultSet Set, DataGrid Grid)? CurrentResult() =>
-        ResultTabs.SelectedItem is TabItem { Tag: QueryResultSet set, Content: DataGrid grid } ? (set, grid) : null;
-
-    private void ResultTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (ReferenceEquals(e.OriginalSource, ResultTabs))
-            UpdateResultButtons();
-    }
-
-    private void UpdateResultButtons()
-    {
-        var hasResult = CurrentResult() is not null;
-        CopyButton.IsEnabled = hasResult;
-        ExportButton.IsEnabled = hasResult;
-    }
-
-    private void Copy_Click(object sender, RoutedEventArgs e)
-    {
-        if (CurrentResult() is not { } current)
-            return;
-
-        var all = current.Grid.SelectedCells.Count <= 1;
-        if (all)
-            current.Grid.SelectAllCells();
-        try
-        {
-            ApplicationCommands.Copy.Execute(null, current.Grid);
-        }
-        catch (ExternalException)
-        {
-            SummaryText.Text = "Буфер обмена занят другой программой, попробуйте ещё раз.";
-        }
-
-        if (all)
-            current.Grid.UnselectAllCells();
-    }
-
-    private void Export_Click(object sender, RoutedEventArgs e)
-    {
-        if (CurrentResult() is not { } current)
-            return;
-
-        var dialog = new SaveFileDialog
-        {
-            Filter = "CSV (*.csv)|*.csv",
-            FileName = $"result_{DateTime.Now:yyyyMMdd_HHmm}.csv"
-        };
-        if (dialog.ShowDialog(Window.GetWindow(this)) != true)
-            return;
-
-        try
-        {
-            File.WriteAllText(dialog.FileName, ResultFormatter.ToCsv(current.Set), new UTF8Encoding(true));
-            SummaryText.Text = current.Set.Truncated
-                ? "Сохранено. В файле только строки в пределах лимита."
-                : "Сохранено в CSV.";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            SummaryText.Text = "Не удалось сохранить файл: " + ex.Message;
-        }
+        var summary = (result.Success ? "Выполнено" : "Ошибка — подробности в «Сообщениях»")
+                      + (selection ? " (выделенный фрагмент)" : "")
+                      + $" · строк: {rows} · {ResultsPanel.Seconds(result.Elapsed)}"
+                      + (result.ResultSets.Any(s => s.Truncated) ? " · показаны не все строки" : "");
+        Results.Show(
+            result.ResultSets.Select((set, i) => ($"Результат {i + 1}", set)).ToList(),
+            messages, summary, openMessages: !result.Success);
     }
 
     private void Open_Click(object sender, RoutedEventArgs e)
@@ -415,74 +300,10 @@ public partial class QueriesView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            SummaryText.Text = "Не удалось открыть файл: " + ex.Message;
+            Results.Summary = "Не удалось открыть файл: " + ex.Message;
         }
     }
 
     private void Connections_Click(object sender, RoutedEventArgs e) =>
         new ConnectionsWindow { Owner = Window.GetWindow(this) }.ShowDialog();
-
-    private sealed class CellConverter : IValueConverter
-    {
-        public static readonly CellConverter Instance = new();
-
-        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-            ResultFormatter.Format(value);
-
-        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-            throw new NotSupportedException();
-    }
-
-    private sealed class ParameterRow
-    {
-        private readonly string _name;
-        private readonly TextBlock _title = new() { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 4) };
-        private readonly ComboBox _kind = new() { ItemsSource = ParameterKinds.Titles, SelectedIndex = 0 };
-        private readonly TextBox _value = new() { Margin = new Thickness(0, 4, 0, 0) };
-        private readonly CheckBox _isNull = new() { Content = "NULL", Margin = new Thickness(0, 4, 0, 0) };
-
-        public ParameterRow(string name, Action kindChanged)
-        {
-            _name = name;
-            _title.Text = name;
-            _title.SetResourceReference(TextBlock.ForegroundProperty, "FgBrush");
-            _isNull.Checked += (_, _) => _value.IsEnabled = false;
-            _isNull.Unchecked += (_, _) => _value.IsEnabled = true;
-            _kind.SelectionChanged += (_, e) =>
-            {
-                e.Handled = true;
-                kindChanged();
-            };
-
-            var panel = new StackPanel { Tag = name };
-            panel.Children.Add(_title);
-            panel.Children.Add(_kind);
-            panel.Children.Add(_value);
-            panel.Children.Add(_isNull);
-            Element = panel;
-        }
-
-        public FrameworkElement Element { get; }
-
-        public SqlParameterKind Kind => ParameterKinds.At(_kind.SelectedIndex);
-
-        /// <summary>Подпись и тип из библиотеки; введённое значение не трогает.</summary>
-        public void Describe(ScriptParameter parameter)
-        {
-            _title.Text = parameter.Label.Length > 0 ? $"{parameter.Label}  ({_name})" : _name;
-            _title.TextWrapping = TextWrapping.Wrap;
-            _kind.SelectedIndex = ParameterKinds.IndexOf(parameter.Kind);
-        }
-
-        public void SetValue(string value) => _value.Text = value;
-
-        /// <summary>Значение по умолчанию подставляется только в пустое поле.</summary>
-        public void SetDefault(string? value)
-        {
-            if (_value.Text.Length == 0 && value is not null)
-                _value.Text = value;
-        }
-
-        public SqlParameterValue Value() => new(_name, Kind, _isNull.IsChecked == true ? null : _value.Text);
-    }
 }

@@ -20,11 +20,30 @@ public enum SqlParameterKind
 /// <param name="Text">null означает NULL.</param>
 public sealed record SqlParameterValue(string Name, SqlParameterKind Kind, string? Text)
 {
+    /// <summary>Значение, полученное из результата другого запроса: передаётся как есть, со своим типом.</summary>
+    private object? Raw { get; init; }
+
+    private SqlColumnType? RawType { get; init; }
+
+    public static SqlParameterValue FromResult(string name, object? value, SqlColumnType type) =>
+        new(name, SqlParameterKind.NVarChar, null) { Raw = value, RawType = type };
+
     private static readonly string[] DateFormats =
         ["yyyy-MM-dd", "dd.MM.yyyy", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "dd.MM.yyyy HH:mm", "dd.MM.yyyy HH:mm:ss"];
 
     public SqlParameter ToSqlParameter()
     {
+        if (RawType is not null)
+        {
+            return new SqlParameter(Name, RawType.DbType)
+            {
+                Size = RawType.Size,
+                Precision = RawType.Precision,
+                Scale = RawType.Scale,
+                Value = Raw ?? DBNull.Value
+            };
+        }
+
         var parameter = new SqlParameter(Name, DbType());
         if (Kind is SqlParameterKind.NVarChar or SqlParameterKind.VarChar)
         {

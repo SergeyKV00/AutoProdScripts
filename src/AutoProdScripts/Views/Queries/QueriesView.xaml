@@ -4,7 +4,7 @@
              xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
              xmlns:queries="clr-namespace:AutoProdScripts.Views.Queries">
   <DockPanel Background="{DynamicResource BgBrush}">
-    <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}"
+    <Border x:Name="ScriptToolbar" DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
       <WrapPanel>
         <TextBlock Text="Подключение" VerticalAlignment="Center" Margin="4,0,6,0"
@@ -35,7 +35,8 @@
     <queries:LibraryPanel x:Name="Library"/>
     <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
                   ResizeDirection="Columns" Background="{DynamicResource BorderBrush}"/>
-    <Grid Grid.Column="2">
+    <queries:ChainView x:Name="Chain" Grid.Column="2" Visibility="Collapsed"/>
+    <Grid x:Name="ScriptArea" Grid.Column="2">
       <Grid.RowDefinitions>
         <RowDefinition Height="*" MinHeight="120"/>
         <RowDefinition Height="6"/>
@@ -84,8 +85,14 @@
                       ResizeDirection="Columns" Background="{DynamicResource BorderBrush}"/>
 
         <DockPanel Grid.Column="2" Background="{DynamicResource PanelBrush}">
-          <TextBlock DockPanel.Dock="Top" Text="ПАРАМЕТРЫ" FontWeight="SemiBold" Margin="8,8,8,4"
-                     Foreground="{DynamicResource FgBrush}"/>
+          <DockPanel DockPanel.Dock="Top" Margin="8,6,8,0">
+            <Button DockPanel.Dock="Right" Content="Очистить" Click="ClearParameters_Click" Margin="0"
+                    Style="{StaticResource ToolbarButton}" ToolTip="Очистить введённые значения"/>
+            <TextBlock Text="ПАРАМЕТРЫ" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Foreground="{DynamicResource FgBrush}"/>
+          </DockPanel>
+          <TextBlock DockPanel.Dock="Bottom" Text="Enter или F5 — выполнить" Margin="8,4"
+                     Foreground="{DynamicResource FgMutedBrush}"/>
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="8,0,8,8">
               <TextBlock x:Name="NoParametersText" TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}"
@@ -99,26 +106,7 @@
       <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
                     ResizeDirection="Rows" Background="{DynamicResource BorderBrush}"/>
 
-      <DockPanel Grid.Row="2" Background="{DynamicResource PanelBrush}">
-        <DockPanel DockPanel.Dock="Top" Margin="8,4">
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-            <Button x:Name="CopyButton" Content="Копировать" Click="Copy_Click" IsEnabled="False"
-                    Style="{StaticResource SecondaryButton}"
-                    ToolTip="Выделенные ячейки или весь набор, с заголовками"/>
-            <Button x:Name="ExportButton" Content="Экспорт в CSV…" Click="Export_Click" IsEnabled="False"
-                    Style="{StaticResource SecondaryButton}"/>
-          </StackPanel>
-          <TextBlock x:Name="SummaryText" VerticalAlignment="Center" TextWrapping="Wrap"
-                     Foreground="{DynamicResource FgMutedBrush}"/>
-        </DockPanel>
-        <TabControl x:Name="ResultTabs" SelectionChanged="ResultTabs_SelectionChanged">
-          <TabItem x:Name="MessagesTab" Header="Сообщения">
-            <TextBox x:Name="MessagesBox" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap"
-                     FontFamily="Consolas" VerticalScrollBarVisibility="Auto"
-                     Background="{DynamicResource BgBrush}"/>
-          </TabItem>
-        </TabControl>
-      </DockPanel>
+      <queries:ResultsPanel x:Name="Results" Grid.Row="2"/>
     </Grid>
     </Grid>
   </DockPanel>

@@ -30,7 +30,18 @@
   </UserControl.Resources>
   <DockPanel Background="{DynamicResource PanelBrush}">
     <StackPanel DockPanel.Dock="Top" Margin="8,8,8,4">
-      <TextBlock Text="БИБЛИОТЕКА" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="{DynamicResource FgBrush}"/>
+      <DockPanel Margin="0,0,0,6">
+        <Button DockPanel.Dock="Right" Content="＋ Цепочка" Click="NewChain_Click" Margin="0"
+                Style="{StaticResource SecondaryButton}" ToolTip="Новая цепочка скриптов"/>
+        <TextBlock Text="БИБЛИОТЕКА" FontWeight="SemiBold" VerticalAlignment="Center"
+                   Foreground="{DynamicResource FgBrush}"/>
+      </DockPanel>
+      <UniformGrid Columns="2" Margin="0,0,0,8">
+        <Button Content="Импорт…" Click="Import_Click" Margin="0,0,3,0" Style="{StaticResource SecondaryButton}"
+                ToolTip="Загрузить скрипты и цепочки из файла"/>
+        <Button Content="Экспорт всего…" Click="ExportAll_Click" Margin="3,0,0,0" Style="{StaticResource SecondaryButton}"
+                ToolTip="Вся библиотека в один файл: для коллег или как резервная копия"/>
+      </UniformGrid>
       <TextBlock Text="Поиск по названию, описанию, базе и тексту" Margin="0,0,0,4" TextWrapping="Wrap"
                  Foreground="{DynamicResource FgMutedBrush}"/>
       <TextBox x:Name="SearchBox" TextChanged="Filter_Changed"/>
@@ -48,12 +59,14 @@
                 ContextMenuOpening="Tree_ContextMenuOpening">
         <TreeView.ContextMenu>
           <ContextMenu>
-            <MenuItem Header="Открыть" Click="Open_Click"/>
-            <MenuItem Header="Свойства…" Click="Properties_Click"/>
+            <MenuItem x:Name="OpenMenu" Header="Открыть" Click="Open_Click"/>
+            <MenuItem x:Name="PropertiesMenu" Header="Свойства…" Click="Properties_Click"/>
             <MenuItem x:Name="FavoriteItem" Header="В избранное" Click="Favorite_Click"/>
-            <MenuItem Header="Дублировать" Click="Duplicate_Click"/>
-            <Separator/>
-            <MenuItem Header="Удалить" Click="Delete_Click"/>
+            <MenuItem x:Name="DuplicateMenu" Header="Дублировать" Click="Duplicate_Click"/>
+            <MenuItem x:Name="ExportMenu" Header="Экспортировать…" Click="Export_Click"/>
+            <MenuItem x:Name="ExportGroupMenu" Header="Экспортировать группу…" Click="ExportGroup_Click"/>
+            <Separator x:Name="DeleteSeparator"/>
+            <MenuItem x:Name="DeleteMenu" Header="Удалить" Click="Delete_Click"/>
           </ContextMenu>
         </TreeView.ContextMenu>
       </TreeView>

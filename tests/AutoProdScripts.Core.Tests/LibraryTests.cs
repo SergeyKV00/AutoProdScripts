@@ -101,7 +101,8 @@ public class LibrarySearchTests
 {
     private static LibraryEntry Entry(string name, string description = "", string sql = "", string connection = "Lis",
         string database = "LIS_test", params string[] tags) =>
-        new(new LibraryScript { Name = name, Description = description, Sql = sql, Tags = tags.ToList() }, connection, database);
+        new(new LibraryScript { Name = name, Description = description, Sql = sql, Tags = tags.ToList() },
+            [connection], [database], sql);
 
     private static readonly LibraryEntry[] Entries =
     [
@@ -110,7 +111,7 @@ public class LibrarySearchTests
         Entry("SickList по ИИН", connection: "Hospital", database: "Hospital_test")
     ];
 
-    private static IEnumerable<string> Names(IEnumerable<LibraryEntry> found) => found.Select(e => e.Script.Name);
+    private static IEnumerable<string> Names(IEnumerable<LibraryEntry> found) => found.Select(e => e.Item.Name);
 
     [Fact]
     public void RanksNameThenDescriptionThenSql() =>
