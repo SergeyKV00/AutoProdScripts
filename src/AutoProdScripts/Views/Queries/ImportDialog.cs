@@ -69,7 +69,7 @@ internal sealed class ImportDialog : Window
             return;
 
         body.Children.Add(Header("Подключения"));
-        body.Children.Add(Muted("В файле только имена. Укажите, какие ваши подключения им соответствуют."));
+        body.Children.Add(Muted("Выберите свои подключения для имён из файла."));
         var mine = App.Connections.GetAll();
         foreach (var name in names)
         {
@@ -80,7 +80,7 @@ internal sealed class ImportDialog : Window
             {
                 var item = new ComboBoxItem
                 {
-                    Content = $"{profile.Name}  ·  {EnvironmentUi.Title(profile.Environment)}",
+                    Content = $"{EnvironmentUi.Option(profile)}  ·  {EnvironmentUi.Title(profile.Environment)}",
                     Tag = new MappedConnection(profile.Id, profile.Name)
                 };
                 box.Items.Add(item);

@@ -1,6 +1,7 @@
 using System.Windows;
 using AutoProdScripts.Core.Connections;
 using AutoProdScripts.Core.Library;
+using AutoProdScripts.Core.Regions;
 using AutoProdScripts.Services.Logging;
 using AutoProdScripts.Services.Settings;
 using AutoProdScripts.Themes;
@@ -14,6 +15,10 @@ public partial class App : Application
 
     private static ConnectionStore? _connections;
     private static ScriptLibrary? _library;
+    private static RegionStore? _regions;
+
+    /// <summary>Справочник «регион → кластер».</summary>
+    public static RegionStore Regions => _regions ??= new RegionStore(Settings.SettingsDirectory);
 
     /// <summary>Локальная библиотека скриптов раздела «Запросы».</summary>
     public static ScriptLibrary Library =>

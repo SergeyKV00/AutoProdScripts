@@ -18,7 +18,10 @@ public partial class ImportConnectionsDialog : Window
                 Tag = parsed,
                 Margin = new Thickness(0, 0, 0, 8),
                 // TextBlock, чтобы «_» в именах не превращался в горячую клавишу.
-                Content = new TextBlock { Text = $"{profile.Name}  —  {profile.Server} · {profile.Database}" }
+                Content = new TextBlock
+                {
+                    Text = $"{profile.Name}  —  {(profile.IsClusterLevel ? "КЛАСТЕР" : "БАЗА " + profile.Database)} · {profile.Server}"
+                }
             });
         }
 

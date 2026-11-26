@@ -40,9 +40,9 @@
         <Button Content="Импорт…" Click="Import_Click" Margin="0,0,3,0" Style="{StaticResource SecondaryButton}"
                 ToolTip="Загрузить скрипты и цепочки из файла"/>
         <Button Content="Экспорт всего…" Click="ExportAll_Click" Margin="3,0,0,0" Style="{StaticResource SecondaryButton}"
-                ToolTip="Вся библиотека в один файл: для коллег или как резервная копия"/>
+                ToolTip="Вся библиотека в один файл"/>
       </UniformGrid>
-      <TextBlock Text="Поиск по названию, описанию, базе и тексту" Margin="0,0,0,4" TextWrapping="Wrap"
+      <TextBlock Text="Поиск" Margin="0,0,0,4" TextWrapping="Wrap"
                  Foreground="{DynamicResource FgMutedBrush}"/>
       <TextBox x:Name="SearchBox" TextChanged="Filter_Changed"/>
       <ComboBox x:Name="ViewBox" Margin="0,6,0,0" SelectionChanged="Filter_Changed"/>

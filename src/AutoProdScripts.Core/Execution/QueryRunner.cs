@@ -25,11 +25,16 @@ public sealed record InputTable(
     IReadOnlyList<SqlColumnType?> Types,
     IReadOnlyList<object?[]> Rows);
 
+/// <param name="RowGroups">
+/// Служебная метка каждой строки (например регион). Не колонка: в таблицу, копирование и CSV не попадает,
+/// по ней можно только сгруппировать.
+/// </param>
 public sealed record QueryResultSet(
     IReadOnlyList<string> Columns,
     IReadOnlyList<object?[]> Rows,
     bool Truncated,
-    IReadOnlyList<SqlColumnType?>? Types = null);
+    IReadOnlyList<SqlColumnType?>? Types = null,
+    IReadOnlyList<string>? RowGroups = null);
 
 public sealed record QueryResult(
     IReadOnlyList<QueryResultSet> ResultSets,

@@ -160,7 +160,7 @@ internal sealed class ParameterRow
         {
             // Скопированный из письма ИИН с пробелом в конце просто «не находится».
             return text != text.Trim()
-                ? ("В начале или конце есть пробелы или перенос строки.", "WarnBrush")
+                ? ("Есть пробелы по краям.", "WarnBrush")
                 : (string.Empty, "FgMutedBrush");
         }
 

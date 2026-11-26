@@ -86,10 +86,11 @@ public partial class LibraryPanel : UserControl
         var entries = scripts.Select(script =>
         {
             var profile = ScriptConnection.Resolve(script, connections);
+            var regional = script.RegionDatabase.Length > 0;
             return new LibraryEntry(
                 script,
-                Named(profile?.Name ?? script.ConnectionName),
-                Named(profile?.Database),
+                Named(regional ? RegionTargets.Title : profile?.Name ?? script.ConnectionName),
+                Named(regional ? script.RegionDatabase : profile?.Database),
                 script.Sql,
                 string.Join('\n', script.Parameters.Select(p => p.Label)));
         }).ToList();
@@ -105,10 +106,11 @@ public partial class LibraryPanel : UserControl
             var profiles = steps.Select(x =>
                 ScriptConnection.Resolve(x.Step.ConnectionId, x.Step.ConnectionName, connections)
                 ?? ScriptConnection.Resolve(x.Script, connections)).OfType<DbConnectionProfile>().ToList();
+            var templates = steps.Select(x => x.Step.EffectiveRegionDatabase(x.Script)).Where(t => t.Length > 0).Distinct().ToList();
             return new LibraryEntry(
                 chain,
-                profiles.Select(p => p.Name).Distinct().ToList(),
-                profiles.Select(p => p.Database).Distinct().ToList(),
+                profiles.Select(p => p.Name).Concat(templates.Count > 0 ? [RegionTargets.Title] : []).Distinct().ToList(),
+                profiles.Select(p => p.Database).Concat(templates).Distinct().ToList(),
                 string.Join('\n', steps.Select(x => x.Script.Sql)),
                 string.Join('\n', steps.Select(x => x.Script.Name).Concat(chain.Parameters.Select(p => p.Label))));
         }));
@@ -167,7 +169,7 @@ public partial class LibraryPanel : UserControl
         }
 
         EmptyText.Text = all.Count == 0
-            ? "Пока пусто. Напишите запрос и нажмите «Сохранить»."
+            ? "Пока пусто."
             : found.Count == 0 ? "Ничего не найдено." : string.Empty;
     }
 

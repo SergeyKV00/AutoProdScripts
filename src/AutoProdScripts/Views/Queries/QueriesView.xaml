@@ -10,12 +10,20 @@
         <TextBlock Text="Подключение" VerticalAlignment="Center" Margin="4,0,6,0"
                    Foreground="{DynamicResource FgMutedBrush}"/>
         <ComboBox x:Name="ConnectionBox" Width="260" SelectionChanged="Connection_SelectionChanged"/>
+        <StackPanel x:Name="RegionControls" Orientation="Horizontal" Visibility="Collapsed">
+          <TextBlock Text="База" VerticalAlignment="Center" Margin="8,0,6,0" Foreground="{DynamicResource FgMutedBrush}"/>
+          <TextBox x:Name="RegionTemplateBox" Width="170" VerticalAlignment="Center" TextChanged="RegionTemplate_Changed"
+                   ToolTip="KMIS → KMIS_ast"/>
+          <queries:RegionPicker x:Name="Regions" Margin="8,0,0,0" VerticalAlignment="Center"/>
+        </StackPanel>
         <Border x:Name="EnvironmentBadge" CornerRadius="3" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Center"
                 Visibility="Collapsed">
           <TextBlock x:Name="EnvironmentText" FontWeight="Bold" Foreground="{DynamicResource BgBrush}"/>
         </Border>
+        <TextBlock x:Name="TargetText" VerticalAlignment="Center" Margin="8,0,0,0" FontWeight="SemiBold"
+                   MaxWidth="320" TextTrimming="CharacterEllipsis"/>
         <Button x:Name="RunButton" Content="▶ Выполнить (F5)" Click="Run_Click" Margin="16,0,0,0"
-                ToolTip="Если выделен фрагмент, выполнится только он"/>
+                ToolTip="Выделенное выполняется отдельно"/>
         <Button x:Name="CancelButton" Content="■ Отмена" Click="Cancel_Click" IsEnabled="False"
                 Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
         <TextBlock Text="Лимит строк" VerticalAlignment="Center" Margin="16,0,6,0"
@@ -96,7 +104,7 @@
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="8,0,8,8">
               <TextBlock x:Name="NoParametersText" TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}"
-                         Text="Переменные, не объявленные через DECLARE (например @id), появятся здесь."/>
+                         Text="Появятся переменные без DECLARE (@id)."/>
               <StackPanel x:Name="ParametersHost"/>
             </StackPanel>
           </ScrollViewer>

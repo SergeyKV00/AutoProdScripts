@@ -23,11 +23,15 @@
         <ComboBox x:Name="GroupBox" IsEditable="True"/>
         <Label Content="Теги через запятую"/>
         <TextBox x:Name="TagsBox"/>
-        <Label Content="Описание: когда использовать, что проверить до и после"/>
+        <Label Content="Описание"/>
         <TextBox x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" Height="110"
                  VerticalScrollBarVisibility="Auto"/>
         <Label Content="Подключение"/>
-        <ComboBox x:Name="ConnectionBox"/>
+        <ComboBox x:Name="ConnectionBox" SelectionChanged="Connection_Changed"/>
+        <StackPanel x:Name="RegionPanel" Visibility="Collapsed">
+          <Label Content="База (KMIS → KMIS_ast)"/>
+          <TextBox x:Name="RegionTemplateBox"/>
+        </StackPanel>
 
         <TextBlock Text="Параметры" FontWeight="SemiBold" Margin="0,16,0,4" Foreground="{DynamicResource FgBrush}"/>
         <TextBlock x:Name="ParametersHint" TextWrapping="Wrap" Margin="0,0,0,6" Foreground="{DynamicResource FgMutedBrush}"/>

@@ -42,6 +42,10 @@
               <TextBlock Text="ОБЩИЕ ПАРАМЕТРЫ" FontWeight="SemiBold" VerticalAlignment="Center"
                          Foreground="{DynamicResource FgBrush}"/>
             </DockPanel>
+            <StackPanel x:Name="RegionPanel" DockPanel.Dock="Top" Margin="8,4,8,4" Visibility="Collapsed">
+              <TextBlock Text="РЕГИОН ЦЕПОЧКИ" FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{DynamicResource FgBrush}"/>
+              <ComboBox x:Name="RegionBox" SelectionChanged="Region_Changed"/>
+            </StackPanel>
             <TextBlock DockPanel.Dock="Bottom" Text="Enter или F5 — выполнить" Margin="8,4"
                        Foreground="{DynamicResource FgMutedBrush}"/>
             <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -78,7 +82,7 @@
             <ComboBox x:Name="GroupBox" IsEditable="True" LostFocus="Property_LostFocus"/>
             <Label Content="Теги через запятую"/>
             <TextBox x:Name="TagsBox" TextChanged="Property_Changed"/>
-            <Label Content="Описание: когда использовать, что означают результаты"/>
+            <Label Content="Описание"/>
             <TextBox x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap" Height="60"
                      VerticalScrollBarVisibility="Auto" TextChanged="Property_Changed"/>
 
@@ -90,7 +94,7 @@
             <TextBlock Text="Общие параметры" FontSize="15" FontWeight="SemiBold" Margin="0,16,0,4"
                        Foreground="{DynamicResource FgBrush}"/>
             <TextBlock TextWrapping="Wrap" Margin="0,0,0,6" Foreground="{DynamicResource FgMutedBrush}"
-                       Text="Вводятся один раз и передаются во все шаги. Значение по умолчанию хранится в файле — не записывайте туда персональные данные и пароли. Если у параметра в самом скрипте задан тип, используется он."/>
+                       Text="Не храните в значениях по умолчанию личные данные."/>
             <StackPanel x:Name="CommonHost"/>
           </StackPanel>
         </ScrollViewer>

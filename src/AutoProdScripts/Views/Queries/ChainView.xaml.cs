@@ -7,6 +7,7 @@ using AutoProdScripts.Core.Chains;
 using AutoProdScripts.Core.Connections;
 using AutoProdScripts.Core.Execution;
 using AutoProdScripts.Core.Library;
+using AutoProdScripts.Core.Regions;
 using AutoProdScripts.Core.Sql;
 
 namespace AutoProdScripts.Views.Queries;
@@ -46,6 +47,8 @@ public partial class ChainView : UserControl
         _chain = chain.Clone();
         _runRows.Clear();
         _described.Clear();
+        // Регион выбирается заново для каждой цепочки.
+        _regionCode = null;
         foreach (var parameter in _chain.Parameters)
             _described[parameter.Name] = parameter.Clone();
 
@@ -150,7 +153,7 @@ public partial class ChainView : UserControl
         head.Children.Add(Text($"Шаг {index + 1}", "FgBrush", bold: true));
         panel.Children.Add(head);
 
-        panel.Children.Add(Caption("Скрипт (текст редактируется справа)"));
+        panel.Children.Add(Caption("Скрипт"));
         var script = new ComboBox();
         var own = new ComboBoxItem { Content = "✎ Свой скрипт, хранится в цепочке", Tag = "own" };
         script.Items.Add(own);
@@ -176,10 +179,17 @@ public partial class ChainView : UserControl
         var selected = step.Inline ?? FindScript(step.ScriptId);
         panel.Children.Add(Caption("Подключение"));
         panel.Children.Add(ConnectionChoice(step, selected, connections));
+        if (step.RegionDatabase.Length > 0)
+        {
+            panel.Children.Add(Caption("База (KMIS → KMIS_ast)"));
+            // «?» — поле очищено: шаг остаётся региональным, а запуск объяснит, что имя неверное.
+            panel.Children.Add(Input(step.RegionDatabase == "?" ? string.Empty : step.RegionDatabase,
+                value => step.RegionDatabase = value.Trim().Length > 0 ? value.Trim() : "?", RefreshParameters));
+        }
 
         var stop = new CheckBox
         {
-            Content = "Не выполнять следующие шаги, если строк нет",
+            Content = "Остановить, если строк нет",
             IsChecked = step.StopWhenEmpty,
             Margin = new Thickness(0, 10, 0, 0)
         };
@@ -190,9 +200,9 @@ public partial class ChainView : UserControl
         };
         panel.Children.Add(stop);
 
-        panel.Children.Add(Caption("Что показать, если строк нет (например «Сотрудника нет в СУР»)"));
+        panel.Children.Add(Caption("Сообщение, если строк нет"));
         panel.Children.Add(Input(step.EmptyMessage, value => step.EmptyMessage = value));
-        panel.Children.Add(Caption("Передать результат дальше как временную таблицу (например #people), необязательно"));
+        panel.Children.Add(Caption("Передать результат дальше как #таблицу"));
         panel.Children.Add(Input(step.OutputTable, value => step.OutputTable = value.Trim(), RefreshParameters));
 
         if (selected is not null && !string.IsNullOrWhiteSpace(selected.Sql))
@@ -219,16 +229,22 @@ public partial class ChainView : UserControl
         var box = new ComboBox();
         var own = script is null ? null : ScriptConnection.Resolve(script, connections)?.Name ?? script.ConnectionName;
         // У своего скрипта шага отдельного подключения нет — оно выбирается здесь.
+        if (script is { RegionDatabase.Length: > 0 })
+            own = $"по регионам {script.RegionDatabase}";
         var none = step.Inline is not null
             ? "Выберите подключение"
             : $"Как в скрипте: {(string.IsNullOrEmpty(own) ? "не задано" : own)}";
         box.Items.Add(new ComboBoxItem { Content = none });
         box.SelectedIndex = 0;
+        var byRegion = new ComboBoxItem { Content = "🌍 По региону цепочки", Tag = "regions" };
+        box.Items.Add(byRegion);
 
+        if (step.RegionDatabase.Length > 0)
+            box.SelectedItem = byRegion;
         var current = ScriptConnection.Resolve(step.ConnectionId, step.ConnectionName, connections);
         foreach (var profile in connections)
         {
-            var item = new ComboBoxItem { Content = profile.Name, Tag = profile };
+            var item = new ComboBoxItem { Content = EnvironmentUi.Option(profile), Tag = profile };
             box.Items.Add(item);
             if (profile.Id == current?.Id)
                 box.SelectedItem = item;
@@ -245,12 +261,18 @@ public partial class ChainView : UserControl
         {
             e.Handled = true;
             var tag = (box.SelectedItem as ComboBoxItem)?.Tag;
-            if (tag is string)
+            if (tag is string name && name != "regions")
                 return;
             var profile = tag as DbConnectionProfile;
             step.ConnectionId = profile?.Id;
             step.ConnectionName = profile?.Name ?? string.Empty;
-            UpdateTitle();
+            var wasRegional = step.RegionDatabase.Length > 0;
+            step.RegionDatabase = tag is "regions" ? "KMIS" : string.Empty;
+            // Поле шаблона появляется или исчезает вместе с выбором.
+            if (wasRegional != step.RegionDatabase.Length > 0)
+                Dispatcher.BeginInvoke(RebuildSteps);
+            else
+                RefreshParameters();
         };
         return box;
     }
@@ -261,11 +283,11 @@ public partial class ChainView : UserControl
         var parameters = ReadOnlyValidator.Analyze(script.Sql).Parameters;
         if (parameters.Count == 0)
         {
-            panel.Children.Add(Caption("В скрипте нет параметров. Значения, заданные через DECLARE, берутся из самого скрипта."));
+            panel.Children.Add(Caption("Параметров нет."));
             return;
         }
 
-        panel.Children.Add(Caption("Параметры шага: откуда брать и как называется общий параметр или колонка"));
+        panel.Children.Add(Caption("Параметры: откуда брать"));
         foreach (var name in parameters)
         {
             var binding = step.Bindings.FirstOrDefault(b => string.Equals(b.Parameter, name, StringComparison.OrdinalIgnoreCase));
@@ -357,6 +379,7 @@ public partial class ChainView : UserControl
 
         RunParameters.Children.Clear();
         CommonHost.Children.Clear();
+        FillRegionChoice(plan);
         foreach (var parameter in plan.CommonParameters)
         {
             if (!_described.TryGetValue(parameter.Name, out var described))
@@ -376,13 +399,22 @@ public partial class ChainView : UserControl
         if (plan.CommonParameters.Count == 0)
         {
             RunParameters.Children.Add(Caption("Общих параметров нет."));
-            CommonHost.Children.Add(Caption("Появятся после добавления шагов со скриптами, где есть параметры."));
+            CommonHost.Children.Add(Caption("Пока нет."));
         }
 
-        ProblemsText.Text = plan.IsValid
-            ? "✔ Цепочка готова к запуску."
-            : "✖ " + string.Join(Environment.NewLine, plan.Problems.Take(3));
-        ProblemsText.SetResourceReference(TextBlock.ForegroundProperty, plan.IsValid ? "SuccessBrush" : "DangerBrush");
+        var connections = App.Connections.GetAll();
+        var noDatabase = plan.Steps
+            .Where(s => StepProfile(s.Step, s.Script, connections) is { IsClusterLevel: true }
+                        && DatabaseChoice.IsMissing(s.Script.Sql))
+            .Select(s => _chain.Steps.FindIndex(x => x.Id == s.Step.Id) + 1)
+            .ToList();
+        ProblemsText.Text = !plan.IsValid
+            ? "✖ " + string.Join(Environment.NewLine, plan.Problems.Take(3))
+            : noDatabase.Count > 0
+                ? $"⚠ Шаги {string.Join(", ", noDatabase)}: {EnvironmentUi.ClusterWarning}"
+                : "✔ Цепочка готова к запуску.";
+        ProblemsText.SetResourceReference(TextBlock.ForegroundProperty,
+            !plan.IsValid ? "DangerBrush" : noDatabase.Count > 0 ? "WarnBrush" : "SuccessBrush");
         UpdateTitle();
     }
 
@@ -390,6 +422,42 @@ public partial class ChainView : UserControl
     {
         foreach (var row in _runRows.Values)
             row.Clear();
+    }
+
+    // Подключение шага: своё, а если не задано — указанное в скрипте.
+    private static DbConnectionProfile? StepProfile(
+        ChainStep step, LibraryScript script, IReadOnlyList<DbConnectionProfile> connections) =>
+        step.EffectiveRegionDatabase(script).Length > 0 ? null
+        : step.ConnectionName.Length > 0 || step.ConnectionId is not null
+            ? ScriptConnection.Resolve(step.ConnectionId, step.ConnectionName, connections)
+            : ScriptConnection.Resolve(script, connections);
+
+    private string? _regionCode;
+
+    // Цепочка выполняется для одного региона: он нужен, только если есть такие шаги.
+    private void FillRegionChoice(ChainPlan plan)
+    {
+        var needed = plan.Steps.Any(s => s.Step.EffectiveRegionDatabase(s.Script).Length > 0);
+        RegionPanel.Visibility = needed ? Visibility.Visible : Visibility.Collapsed;
+        var wasLoading = _loading;
+        _loading = true;
+        RegionBox.Items.Clear();
+        foreach (var region in App.Regions.GetAll())
+        {
+            var item = new ComboBoxItem { Content = new TextBlock { Text = region.Title }, Tag = region.Code };
+            RegionBox.Items.Add(item);
+            if (region.Code == _regionCode)
+                RegionBox.SelectedItem = item;
+        }
+
+        _loading = wasLoading;
+    }
+
+    private void Region_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        e.Handled = true;
+        if (!_loading)
+            _regionCode = (RegionBox.SelectedItem as ComboBoxItem)?.Tag as string;
     }
 
     private FrameworkElement CommonEditor(ScriptParameter parameter)
@@ -542,9 +610,21 @@ public partial class ChainView : UserControl
             Connect = (step, script) =>
             {
                 var number = plan.Steps.ToList().FindIndex(s => s.Step.Id == step.Id) + 1;
-                var profile = (step.ConnectionName.Length > 0 || step.ConnectionId is not null
-                                  ? ScriptConnection.Resolve(step.ConnectionId, step.ConnectionName, connections)
-                                  : ScriptConnection.Resolve(script, connections))
+                var template = step.EffectiveRegionDatabase(script).Trim();
+                if (template.Length > 0)
+                {
+                    if (RegionDatabase.Validate(template) is { } problem)
+                        throw new InvalidOperationException($"Шаг {number}: {problem}");
+                    var code = _regionCode
+                               ?? throw new InvalidOperationException("Выберите регион цепочки над общими параметрами.");
+                    var (target, regional) = RegionTargets.Build(code, template);
+                    if (target.Error is not null || regional is null)
+                        throw new InvalidOperationException($"Шаг {number}, регион {code}: {target.Error}");
+                    profiles.Add(regional);
+                    return new StepConnection($"{code}: {regional.Name}", target.ConnectionString, target.CommandTimeoutSeconds);
+                }
+
+                var profile = StepProfile(step, script, connections)
                               ?? throw new InvalidOperationException($"Шаг {number}: нет подключения. Выберите его в настройке шага.");
                 var password = profile.AuthMode == DbAuthMode.SqlLogin ? App.Connections.LoadPassword(profile.Id) : null;
                 if (profile.AuthMode == DbAuthMode.SqlLogin && password is null)
@@ -610,7 +690,7 @@ public partial class ChainView : UserControl
                 _ => ("—", "FgMutedBrush")
             };
             var environment = profiles.ElementAtOrDefault(result.Index) is { } profile
-                ? $" · {EnvironmentUi.Title(profile.Environment)}"
+                ? $" · {EnvironmentUi.Title(profile.Environment)} · {EnvironmentUi.Target(profile)}"
                 : string.Empty;
             var title = $"{result.Index + 1}. {result.Title}  [{result.ConnectionName}{environment}]";
             var line = Text($"{mark} {title} — {result.Message}", brush);
@@ -654,6 +734,7 @@ public partial class ChainView : UserControl
         CancelButton.IsEnabled = busy;
         EditRoot.IsEnabled = !busy;
         RunParameters.IsEnabled = !busy;
+        RegionPanel.IsEnabled = !busy;
         BusyChanged?.Invoke(busy);
     }
 

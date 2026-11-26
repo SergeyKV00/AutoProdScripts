@@ -55,6 +55,7 @@ public partial class QueriesView : UserControl
                 if (InChain)
                     Chain.Reload();
             };
+            InitializeRegions();
             ReloadConnections();
             Library.Initialize();
             UpdateHeader();
@@ -78,7 +79,10 @@ public partial class QueriesView : UserControl
     private void ReloadConnections()
     {
         var selected = SelectedConnection?.Id;
+        var regional = IsRegional;
         ConnectionBox.Items.Clear();
+        var byRegion = new ComboBoxItem { Content = "🌍 " + RegionTargets.Title, Tag = RegionalTag };
+        ConnectionBox.Items.Add(byRegion);
         foreach (var profile in App.Connections.GetAll())
         {
             // Выбранный пункт ComboBox показывает Content как есть, поэтому нужна строка, а не элемент.
@@ -88,6 +92,8 @@ public partial class QueriesView : UserControl
                 ConnectionBox.SelectedItem = item;
         }
 
+        if (regional)
+            ConnectionBox.SelectedItem = byRegion;
         UpdateBadge();
     }
 
@@ -95,20 +101,34 @@ public partial class QueriesView : UserControl
     {
         e.Handled = true;
         UpdateBadge();
+        // Предупреждение о базе зависит от выбранного подключения.
+        if (_initialized)
+            CheckScript();
     }
 
     private void UpdateBadge()
     {
+        RegionControls.Visibility = IsRegional ? Visibility.Visible : Visibility.Collapsed;
+        if (IsRegional)
+        {
+            UpdateRegionBadge();
+            return;
+        }
+
         if (SelectedConnection is not { } profile)
         {
             EnvironmentBadge.Visibility = Visibility.Collapsed;
+            TargetText.Text = string.Empty;
             return;
         }
 
         EnvironmentBadge.Visibility = Visibility.Visible;
         EnvironmentBadge.SetResourceReference(Border.BackgroundProperty, EnvironmentUi.BrushKey(profile.Environment));
         EnvironmentText.Text = EnvironmentUi.Title(profile.Environment);
-        EnvironmentBadge.ToolTip = $"{profile.Server} · {profile.Database}";
+        EnvironmentBadge.ToolTip = profile.Server;
+        TargetText.Text = profile.IsClusterLevel ? $"КЛАСТЕР {profile.Server}" : $"БАЗА {profile.Database}";
+        TargetText.ToolTip = $"{profile.Server} · {EnvironmentUi.Target(profile)}";
+        TargetText.SetResourceReference(TextBlock.ForegroundProperty, profile.IsClusterLevel ? "WarnBrush" : "FgInfoBrush");
     }
 
     private void CheckScript()
@@ -122,7 +142,7 @@ public partial class QueriesView : UserControl
         _checkTimer.Stop();
         if (string.IsNullOrWhiteSpace(Editor.Text))
         {
-            SetCheck("Напишите или откройте SQL. Разрешено только чтение и работа с временными таблицами.", "FgMutedBrush");
+            SetCheck("Напишите или откройте SQL.", "FgMutedBrush");
             ShowParameters([]);
             return;
         }
@@ -130,7 +150,10 @@ public partial class QueriesView : UserControl
         var analysis = ReadOnlyValidator.Analyze(Editor.Text);
         if (analysis.IsAllowed)
         {
-            SetCheck("✔ Проверка «только чтение» пройдена.", "SuccessBrush");
+            if (SelectedConnection is { IsClusterLevel: true } && DatabaseChoice.IsMissing(Editor.Text))
+                SetCheck("⚠ " + EnvironmentUi.ClusterWarning, "WarnBrush");
+            else
+                SetCheck("✔ Проверка «только чтение» пройдена.", "SuccessBrush");
             ShowParameters(analysis.Parameters);
         }
         else
@@ -181,9 +204,11 @@ public partial class QueriesView : UserControl
         CheckScript();
         var selection = Editor.SelectionLength > 0;
         var sql = selection ? Editor.SelectedText : Editor.Text;
-        if (SelectedConnection is not { } profile)
+        var regional = IsRegional;
+        var profile = SelectedConnection;
+        if (profile is null && !regional)
         {
-            Results.ShowFailure(ConnectionBox.Items.Count == 0
+            Results.ShowFailure(App.Connections.GetAll().Count == 0
                 ? "Сначала добавьте подключение (кнопка «Подключения…»)."
                 : "Выберите подключение.");
             return;
@@ -200,6 +225,12 @@ public partial class QueriesView : UserControl
         if (!int.TryParse(MaxRowsBox.Text.Trim(), out var maxRows) || maxRows <= 0)
         {
             Results.ShowFailure("Лимит строк должен быть положительным числом.");
+            return;
+        }
+
+        if (profile is null)
+        {
+            await RunRegionsAsync(sql, analysis, maxRows, selection);
             return;
         }
 
@@ -267,6 +298,7 @@ public partial class QueriesView : UserControl
         Library.IsEnabled = !busy;
         ScriptHeader.IsEnabled = !busy;
         OpenButton.IsEnabled = !busy;
+        RegionControls.IsEnabled = !busy;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _running?.Cancel();

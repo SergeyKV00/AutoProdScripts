@@ -246,10 +246,19 @@ public partial class QueriesView
 
     private void SelectScriptConnection(LibraryScript script)
     {
+        if (script.RegionDatabase.Length > 0)
+        {
+            RegionTemplateBox.Text = script.RegionDatabase;
+            ConnectionBox.SelectedItem = ConnectionBox.Items.OfType<ComboBoxItem>().First(i => i.Tag is RegionalTag);
+            return;
+        }
+
         var profile = ScriptConnection.Resolve(script, App.Connections.GetAll());
         // Если подключения нет, не оставляем выбранным чужое: запрос ушёл бы не в ту базу.
-        ConnectionBox.SelectedItem = ConnectionBox.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(i => ((Core.Connections.DbConnectionProfile)i.Tag).Id == profile?.Id);
+        ConnectionBox.SelectedItem = profile is null
+            ? null
+            : ConnectionBox.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(i => (i.Tag as Core.Connections.DbConnectionProfile)?.Id == profile.Id);
         if (profile is null && script.ConnectionName.Length > 0)
             Results.Summary = $"Подключения «{script.ConnectionName}» на этом ПК нет. Выберите другое.";
     }
@@ -318,6 +327,13 @@ public partial class QueriesView
         {
             script.ConnectionId = profile.Id;
             script.ConnectionName = profile.Name;
+            script.RegionDatabase = string.Empty;
+        }
+        else if (IsRegional)
+        {
+            script.ConnectionId = null;
+            script.ConnectionName = string.Empty;
+            script.RegionDatabase = RegionTemplateBox.Text.Trim();
         }
 
         var dialog = new ScriptPropertiesDialog(script) { Owner = Window.GetWindow(this) };

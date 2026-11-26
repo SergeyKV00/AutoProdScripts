@@ -233,9 +233,12 @@
       <TabItem x:Name="DatabasesTab" Header="Подключения к базам">
         <DockPanel>
           <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,10" Foreground="{DynamicResource FgMutedBrush}"
-                     Text="Для раздела «Запросы». Подключения сохраняются кнопкой «Сохранить подключение», а не общей кнопкой окна."/>
+                     Text="Сохраняются кнопкой «Сохранить подключение»."/>
           <queries:ConnectionsEditor x:Name="DatabaseConnections"/>
         </DockPanel>
+      </TabItem>
+      <TabItem x:Name="RegionsTab" Header="Регионы">
+        <queries:RegionsEditor x:Name="DatabaseRegions"/>
       </TabItem>
     </TabControl>
   </DockPanel>

@@ -22,10 +22,13 @@ public sealed class LibraryScript : LibraryItem
 
     public string ConnectionName { get; set; } = string.Empty;
     public string Sql { get; set; } = string.Empty;
+
+    /// <summary>Шаблон базы вида «KMIS_{region}»: скрипт выполняется по регионам, а не на одном подключении.</summary>
+    public string RegionDatabase { get; set; } = string.Empty;
     public List<ScriptParameter> Parameters { get; set; } = new();
 
     internal override bool IsComplete =>
-        base.IsComplete && Sql is not null && ConnectionName is not null && Parameters is not null;
+        base.IsComplete && Sql is not null && ConnectionName is not null && Parameters is not null && RegionDatabase is not null;
 
     public LibraryScript Clone()
     {

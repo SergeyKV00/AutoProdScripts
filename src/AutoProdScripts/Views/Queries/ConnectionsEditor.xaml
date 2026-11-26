@@ -28,7 +28,7 @@
           <StackPanel>
             <TextBlock Text="Вставить строку подключения" FontWeight="SemiBold" Foreground="{DynamicResource FgBrush}"/>
             <TextBlock TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{DynamicResource FgMutedBrush}"
-                       Text="Вставьте строку или блок из конфига (Ctrl+V) — поля заполнятся сами. Вставленный текст с паролем в поле не остаётся."/>
+                       Text="Ctrl+V — поля заполнятся сами."/>
             <TextBox x:Name="PasteBox" Height="48" AcceptsReturn="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"/>
             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
@@ -47,8 +47,14 @@
         <Label Content="Сервер или listener кластера"/>
         <TextBox x:Name="ServerBox"/>
 
-        <Label Content="База"/>
-        <TextBox x:Name="DatabaseBox"/>
+        <Label Content="Куда подключаться"/>
+        <ComboBox x:Name="LevelBox" SelectionChanged="Level_SelectionChanged"/>
+        <TextBlock x:Name="LevelHint" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource FgMutedBrush}"/>
+
+        <StackPanel x:Name="DatabasePanel">
+          <Label Content="База"/>
+          <TextBox x:Name="DatabaseBox"/>
+        </StackPanel>
 
         <Label Content="Вход"/>
         <ComboBox x:Name="AuthBox" SelectionChanged="Auth_SelectionChanged"/>

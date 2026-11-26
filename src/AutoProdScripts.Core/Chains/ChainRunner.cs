@@ -21,8 +21,18 @@ public sealed record ChainStepResult(
     string Message,
     QueryResult? Result);
 
-/// <summary>Предыдущий шаг вернул несколько разных значений — нужно выбрать одно.</summary>
-public sealed record ChoiceRequest(int StepIndex, string Parameter, int SourceStepIndex, string Column, IReadOnlyList<object?> Values);
+/// <summary>
+/// Шаг-источник вернул несколько разных строк — нужно выбрать одну. Выбор делается один раз:
+/// из этой строки берутся значения всех параметров всех следующих шагов.
+/// </summary>
+/// <param name="Uses">Что будет взято из строки: параметр, колонка и номер шага-получателя.</param>
+public sealed record ChoiceRequest(
+    int SourceStepIndex,
+    IReadOnlyList<RowUse> Uses,
+    IReadOnlyList<string> Columns,
+    IReadOnlyList<object?[]> Rows);
+
+public sealed record RowUse(int StepIndex, string Parameter, string Column);
 
 public sealed class ChainRunRequest
 {
@@ -37,7 +47,7 @@ public sealed class ChainRunRequest
 
     public int MaxRows { get; init; } = 10_000;
 
-    /// <summary>Номер выбранного значения или null — остановиться.</summary>
+    /// <summary>Номер выбранной строки или null — остановиться.</summary>
     public Func<ChoiceRequest, Task<int?>>? Choose { get; init; }
 }
 
@@ -69,6 +79,8 @@ public static class ChainRunner
         }
 
         var results = new List<ChainStepResult>();
+        // Строка, выбранная из результата шага-источника (номер шага -> строка).
+        var chosenRows = new Dictionary<int, object?[]>();
         var stopped = false;
         for (var index = 0; index < plan.Steps.Count; index++)
         {
@@ -95,7 +107,7 @@ public static class ChainRunner
                     foreach (var input in step.Inputs)
                     {
                         parameters.Add(input.FromStep is { } source
-                            ? await ValueFromStepAsync(request, index, input, source, results)
+                            ? ValueFromRow(await RowOfStepAsync(request, plan, source, results, chosenRows), input, source, results)
                             : CommonValue(plan, step, input, values));
                     }
 
@@ -160,33 +172,72 @@ public static class ChainRunner
         return query.ResultSets[0];
     }
 
-    private static async Task<SqlParameterValue> ValueFromStepAsync(
-        ChainRunRequest request, int index, StepInput input, int source, IReadOnlyList<ChainStepResult> results)
+    private static async Task<object?[]> RowOfStepAsync(
+        ChainRunRequest request,
+        ChainPlan plan,
+        int source,
+        IReadOnlyList<ChainStepResult> results,
+        Dictionary<int, object?[]> chosenRows)
     {
+        if (chosenRows.TryGetValue(source, out var chosen))
+            return chosen;
+
         var set = Output(results, source);
-        var columns = set.Columns.Select((name, i) => (name, i)).Where(c => Same(c.name, input.Source)).ToList();
-        if (columns.Count != 1)
-            throw new StopStep($"В результате шага {source + 1} нет единственной колонки «{input.Source}».");
-
-        var column = columns[0].i;
-        var type = set.Types?[column]
-                   ?? throw new StopStep($"Значение колонки «{input.Source}» этого типа передать нельзя.");
-
-        var distinct = set.Rows.Select(r => r[column])
-            .DistinctBy(v => v is byte[] bytes ? Convert.ToHexString(bytes) : v)
+        var uses = plan.Steps
+            .SelectMany((step, i) => step.Inputs
+                .Where(x => x.FromStep == source)
+                .Select(x => new RowUse(i, x.Parameter, x.Source)))
             .ToList();
+        // Строки различаются только тем, что из них действительно берут. Отсутствующая колонка
+        // станет ошибкой того шага, которому она нужна.
+        var used = uses.Select(u => ColumnIndex(set, u.Column)).Where(i => i >= 0).Distinct().ToList();
+        var rows = set.Rows.DistinctBy(row => RowKey(row, used)).ToList();
+
         var selected = 0;
-        if (distinct.Count > 1)
+        if (rows.Count > 1)
         {
             var choice = request.Choose is null
                 ? null
-                : await request.Choose(new ChoiceRequest(index, input.Parameter, source, input.Source, distinct));
-            selected = choice ?? throw new StopStep(
-                $"Шаг {source + 1} вернул несколько значений «{input.Source}» — значение не выбрано.");
+                : await request.Choose(new ChoiceRequest(source, uses, set.Columns, rows));
+            selected = choice ?? throw new StopStep($"Шаг {source + 1} вернул несколько строк — строка не выбрана.");
         }
 
-        return SqlParameterValue.FromResult(input.Parameter, distinct[selected], type);
+        return chosenRows[source] = rows[selected];
     }
+
+    private static SqlParameterValue ValueFromRow(
+        object?[] row, StepInput input, int source, IReadOnlyList<ChainStepResult> results)
+    {
+        var set = Output(results, source);
+        var column = ColumnIndex(set, input.Source);
+        if (column < 0)
+            throw new StopStep($"В результате шага {source + 1} нет единственной колонки «{input.Source}».");
+
+        var type = set.Types?[column]
+                   ?? throw new StopStep($"Значение колонки «{input.Source}» этого типа передать нельзя.");
+        return SqlParameterValue.FromResult(input.Parameter, row[column], type);
+    }
+
+    /// <returns>-1 — колонки с таким именем нет или их несколько.</returns>
+    private static int ColumnIndex(QueryResultSet set, string name)
+    {
+        var found = set.Columns.Select((column, i) => (column, i)).Where(c => Same(c.column, name)).ToList();
+        return found.Count == 1 ? found[0].i : -1;
+    }
+
+    private static string RowKey(object?[] row, IReadOnlyList<int> columns) => string.Concat(columns.Select(i =>
+    {
+        var text = row[i] switch
+        {
+            null => null,
+            byte[] bytes => Convert.ToHexString(bytes),
+            DateTime date => date.Ticks.ToString(),
+            DateTimeOffset date => date.ToString("O"),
+            var other => Convert.ToString(other, System.Globalization.CultureInfo.InvariantCulture)
+        };
+        // Длина впереди, чтобы соседние значения не склеивались в одинаковый ключ.
+        return text is null ? "~;" : $"{text.Length}:{text};";
+    }));
 
     private static InputTable TableFromStep(ChainPlan plan, int source, IReadOnlyList<ChainStepResult> results)
     {

@@ -21,7 +21,16 @@ internal static class EnvironmentUi
         _ => "DangerBrush"
     };
 
-    /// <summary>Строка списка: цветная метка среды и имя подключения.</summary>
+    /// <summary>Куда ведёт подключение: «кластер» или «база X».</summary>
+    public static string Target(DbConnectionProfile profile) =>
+        profile.IsClusterLevel ? "кластер" : $"база {profile.Database}";
+
+    public static string Option(DbConnectionProfile profile) => $"{profile.Name}  ·  {Target(profile)}";
+
+    public const string ClusterWarning =
+        "Не указана база: добавьте USE или пишите База.dbo.Таблица.";
+
+    /// <summary>Строка списка: цветная метка среды, имя и ниже — кластер это или база.</summary>
     public static FrameworkElement Label(DbConnectionProfile profile)
     {
         var text = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
@@ -29,7 +38,14 @@ internal static class EnvironmentUi
         mark.SetResourceReference(TextElement.ForegroundProperty, BrushKey(profile.Environment));
         text.Inlines.Add(mark);
         text.Inlines.Add(new Run(profile.Name));
-        text.ToolTip = $"{Title(profile.Environment)} · {profile.Server} · {profile.Database}";
+        text.Inlines.Add(new LineBreak());
+        var kind = new Run(profile.IsClusterLevel ? "    КЛАСТЕР " : "    БАЗА ") { FontSize = 11, FontWeight = FontWeights.Bold };
+        kind.SetResourceReference(TextElement.ForegroundProperty, profile.IsClusterLevel ? "WarnBrush" : "FgInfoBrush");
+        text.Inlines.Add(kind);
+        var where = new Run(profile.IsClusterLevel ? profile.Server : $"{profile.Database} · {profile.Server}") { FontSize = 11 };
+        where.SetResourceReference(TextElement.ForegroundProperty, "FgMutedBrush");
+        text.Inlines.Add(where);
+        text.ToolTip = $"{Title(profile.Environment)} · {profile.Server} · {Target(profile)}";
         return text;
     }
 }

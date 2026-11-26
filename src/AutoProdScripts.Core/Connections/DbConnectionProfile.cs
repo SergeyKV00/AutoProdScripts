@@ -25,6 +25,11 @@ public sealed class DbConnectionProfile
 
     public string Server { get; set; } = string.Empty;
     public string Database { get; set; } = string.Empty;
+
+    /// <summary>База не указана: подключение к кластеру, базу выбирает скрипт (USE или полное имя).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsClusterLevel => string.IsNullOrWhiteSpace(Database);
+
     public DbAuthMode AuthMode { get; set; } = DbAuthMode.Windows;
     public string UserName { get; set; } = string.Empty;
     public bool Encrypt { get; set; }

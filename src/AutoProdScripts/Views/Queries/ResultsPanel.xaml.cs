@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -14,6 +15,9 @@ namespace AutoProdScripts.Views.Queries;
 /// <summary>Наборы результатов, сообщения, копирование и CSV — общее для скриптов и цепочек.</summary>
 public partial class ResultsPanel : UserControl
 {
+    // Выбор группировки сохраняется между запусками до закрытия приложения.
+    private static bool _grouped;
+
     public ResultsPanel() => InitializeComponent();
 
     public string Summary
@@ -24,6 +28,10 @@ public partial class ResultsPanel : UserControl
 
     public string Messages => MessagesBox.Text;
 
+    /// <summary>Выделяет итог, когда данным нельзя доверять полностью.</summary>
+    public void Warn(bool warn) =>
+        SummaryText.SetResourceReference(TextBlock.ForegroundProperty, warn ? "WarnBrush" : "FgMutedBrush");
+
     public static string Seconds(TimeSpan elapsed) => elapsed.TotalSeconds.ToString("0.00", CultureInfo.CurrentCulture) + " с";
 
     public void Clear()
@@ -32,6 +40,7 @@ public partial class ResultsPanel : UserControl
             ResultTabs.Items.RemoveAt(0);
         MessagesBox.Clear();
         SummaryText.Text = string.Empty;
+        Warn(false);
         ResultTabs.SelectedItem = MessagesTab;
         UpdateButtons();
     }
@@ -68,12 +77,14 @@ public partial class ResultsPanel : UserControl
         UpdateButtons();
     }
 
-    private static DataGrid CreateGrid(QueryResultSet set)
+    internal static DataGrid CreateGrid(QueryResultSet set)
     {
         var grid = new DataGrid
         {
             AutoGenerateColumns = false,
             IsReadOnly = true,
+            // Иначе при группировке сама подсвечивается первая ячейка.
+            IsSynchronizedWithCurrentItem = false,
             CanUserSortColumns = false,
             CanUserAddRows = false,
             CanUserDeleteRows = false,
@@ -116,6 +127,57 @@ public partial class ResultsPanel : UserControl
         var hasResult = CurrentResult() is not null;
         CopyButton.IsEnabled = hasResult;
         ExportButton.IsEnabled = hasResult;
+
+        var current = CurrentResult();
+        GroupBox.Visibility = current?.Set.RowGroups is not null ? Visibility.Visible : Visibility.Collapsed;
+        GroupBox.IsChecked = _grouped;
+        if (current is { } result)
+            ApplyGrouping(result.Set, result.Grid);
+    }
+
+    private void Group_Click(object sender, RoutedEventArgs e)
+    {
+        _grouped = GroupBox.IsChecked == true;
+        if (CurrentResult() is { } current)
+            ApplyGrouping(current.Set, current.Grid);
+    }
+
+    private void ApplyGrouping(QueryResultSet set, DataGrid grid)
+    {
+        if (set.RowGroups is not { } groups)
+            return;
+
+        var grouped = grid.ItemsSource is ListCollectionView;
+        if (grouped == _grouped)
+            return;
+
+        grid.UnselectAllCells();
+        if (!_grouped)
+        {
+            grid.GroupStyle.Clear();
+            grid.ItemsSource = set.Rows;
+            return;
+        }
+
+        // Строки — разные массивы, поэтому метку находим по самой ссылке на строку.
+        var byRow = new Dictionary<object, string>(ReferenceEqualityComparer.Instance);
+        for (var i = 0; i < set.Rows.Count; i++)
+            byRow[set.Rows[i]] = groups[i];
+
+        var view = new ListCollectionView(set.Rows.ToList());
+        view.GroupDescriptions.Add(new RowGroupDescription(byRow));
+
+        grid.GroupStyle.Clear();
+        grid.GroupStyle.Add(new GroupStyle { ContainerStyle = (Style)FindResource("RegionGroup") });
+
+        // Без этого группировка отключает виртуализацию, и большая выгрузка подвешивает окно.
+        VirtualizingPanel.SetIsVirtualizingWhenGrouping(grid, true);
+        grid.ItemsSource = view;
+    }
+
+    private sealed class RowGroupDescription(IReadOnlyDictionary<object, string> groups) : GroupDescription
+    {
+        public override object GroupNameFromItem(object item, int level, CultureInfo culture) => groups[item];
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)

@@ -56,8 +56,8 @@ public partial class LibraryPanel
         }
 
         var message = $"Скриптов: {package.Scripts.Count}, цепочек: {package.Chains.Count}.\n\n"
-                      + "Паролей, адресов серверов и значений параметров в файле не будет. "
-                      + "Текст SQL и описания выгружаются как есть — убедитесь, что в них нет персональных данных."
+                      + "Паролей, серверов и значений параметров в файле не будет.\n"
+                      + "SQL выгружается как есть — проверьте, нет ли в нём персональных данных."
                       + string.Concat(result.Warnings.Select(w => "\n\n⚠ " + w));
         if (MessageBox.Show(owner, message, "Экспорт", MessageBoxButton.OKCancel,
                 result.Warnings.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information) != MessageBoxResult.OK)

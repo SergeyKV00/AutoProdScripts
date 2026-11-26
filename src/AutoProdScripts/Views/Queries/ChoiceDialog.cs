@@ -1,36 +1,55 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using AutoProdScripts.Core.Chains;
 using AutoProdScripts.Core.Execution;
 
 namespace AutoProdScripts.Views.Queries;
 
-/// <summary>Предыдущий шаг вернул несколько значений — пользователь выбирает одно.</summary>
+/// <summary>Предыдущий шаг вернул несколько строк — пользователь выбирает одну целиком.</summary>
 internal sealed class ChoiceDialog : Window
 {
     private const int Shown = 1000;
-    private readonly ListBox _list = new();
+    private readonly DataGrid _grid;
 
     public ChoiceDialog(ChoiceRequest request)
     {
-        Title = "Выберите значение";
-        Width = 460;
+        Title = "Выберите строку";
+        Width = 760;
         Height = 480;
+        MinWidth = 460;
+        MinHeight = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         SetResourceReference(BackgroundProperty, "BgBrush");
         SetResourceReference(ForegroundProperty, "FgBrush");
 
+        var uses = request.Uses.Select(u => $"  шаг {u.StepIndex + 1}: {u.Parameter} ← колонка «{u.Column}»");
         var hint = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
-            Text = $"Шаг {request.SourceStepIndex + 1} вернул несколько значений «{request.Column}». "
-                   + $"Какое передать в {request.Parameter} на шаге {request.StepIndex + 1}?"
-                   + (request.Values.Count > Shown ? $" Показаны первые {Shown}." : string.Empty)
+            Text = $"Шаг {request.SourceStepIndex + 1} вернул несколько строк. Из выбранной строки будут взяты:\n"
+                   + string.Join('\n', uses)
+                   + (request.Rows.Count > Shown ? $"\nПоказаны первые {Shown} строк." : string.Empty)
         };
-        foreach (var value in request.Values.Take(Shown))
-            _list.Items.Add(ResultFormatter.Format(value));
-        _list.MouseDoubleClick += (_, _) => Accept();
+
+        // Вся строка, а не только передаваемые колонки: по остальным её проще узнать.
+        _grid = ResultsPanel.CreateGrid(new QueryResultSet(request.Columns, request.Rows.Take(Shown).ToList(), false));
+        _grid.SelectionUnit = DataGridSelectionUnit.FullRow;
+        _grid.SelectionMode = DataGridSelectionMode.Single;
+        _grid.MouseDoubleClick += (_, e) =>
+        {
+            // Двойной щелчок по заголовку или прокрутке ничего не выбирает.
+            if (e.OriginalSource is FrameworkElement { DataContext: object?[] })
+                Accept();
+        };
+        _grid.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter)
+                return;
+            e.Handled = true;
+            Accept();
+        };
 
         var stop = new Button { Content = "Остановить", IsCancel = true, Width = 110 };
         stop.SetResourceReference(StyleProperty, "SecondaryButton");
@@ -50,7 +69,7 @@ internal sealed class ChoiceDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         panel.Children.Add(hint);
         panel.Children.Add(buttons);
-        panel.Children.Add(_list);
+        panel.Children.Add(_grid);
         Content = panel;
     }
 
@@ -58,10 +77,10 @@ internal sealed class ChoiceDialog : Window
 
     private void Accept()
     {
-        // Без выбора не подставляем первое значение молча.
-        if (_list.SelectedIndex < 0)
+        // Без выбора не подставляем первую строку молча.
+        if (_grid.SelectedIndex < 0)
             return;
-        Selected = _list.SelectedIndex;
+        Selected = _grid.SelectedIndex;
         DialogResult = true;
     }
 }

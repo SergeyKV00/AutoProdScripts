@@ -25,6 +25,7 @@ public partial class ConnectionsEditor : UserControl
             EnvironmentUi.Title(DbEnvironment.Dev)
         };
         AuthBox.ItemsSource = new[] { "Windows-аутентификация", "SQL-логин" };
+        LevelBox.ItemsSource = new[] { "К конкретной базе", "К кластеру (без базы)" };
         DataObject.AddPastingHandler(PasteBox, OnPaste);
         Unloaded += (_, _) => _test?.Cancel();
 
@@ -99,6 +100,9 @@ public partial class ConnectionsEditor : UserControl
         EnvironmentBox.SelectedIndex = (int)profile.Environment;
         ServerBox.Text = profile.Server;
         DatabaseBox.Text = profile.Database;
+        // У нового пустого подключения предлагаем базу; «кластер» — только когда сервер уже есть, а базы нет.
+        LevelBox.SelectedIndex = profile.IsClusterLevel && profile.Server.Length > 0 ? ClusterLevel : DatabaseLevel;
+        UpdateLevel();
         AuthBox.SelectedIndex = (int)profile.AuthMode;
         UserBox.Text = profile.UserName;
         EncryptBox.IsChecked = profile.Encrypt;
@@ -109,13 +113,30 @@ public partial class ConnectionsEditor : UserControl
         ExtraBox.Text = profile.ExtraParameters;
     }
 
+    private const int DatabaseLevel = 0;
+    private const int ClusterLevel = 1;
+
+    private void Level_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        e.Handled = true;
+        UpdateLevel();
+    }
+
+    private void UpdateLevel()
+    {
+        var cluster = LevelBox.SelectedIndex == ClusterLevel;
+        DatabasePanel.Visibility = cluster ? Visibility.Collapsed : Visibility.Visible;
+        LevelHint.Text = "Базу задаёт скрипт: USE или База.dbo.Таблица.";
+        LevelHint.Visibility = cluster ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private DbConnectionProfile Collect()
     {
         var profile = _current.Clone();
         profile.Name = NameBox.Text.Trim();
         profile.Environment = (DbEnvironment)Math.Max(0, EnvironmentBox.SelectedIndex);
         profile.Server = ServerBox.Text.Trim();
-        profile.Database = DatabaseBox.Text.Trim();
+        profile.Database = LevelBox.SelectedIndex == ClusterLevel ? string.Empty : DatabaseBox.Text.Trim();
         profile.AuthMode = (DbAuthMode)Math.Max(0, AuthBox.SelectedIndex);
         profile.UserName = UserBox.Text.Trim();
         profile.Encrypt = EncryptBox.IsChecked == true;
@@ -135,8 +156,8 @@ public partial class ConnectionsEditor : UserControl
     private void UpdatePasswordHint()
     {
         PasswordHint.Text = !_isNew && App.Connections.LoadPassword(_current.Id) is not null
-            ? "Пароль сохранён. Оставьте поле пустым, чтобы не менять его."
-            : "Пароль хранится в Windows Credential Manager.";
+            ? "Сохранён. Пусто — не менять."
+            : "Хранится в Credential Manager.";
     }
 
     private void Auth_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -211,6 +232,8 @@ public partial class ConnectionsEditor : UserControl
     private void SaveConnection_Click(object sender, RoutedEventArgs e) => Try(() =>
     {
         var profile = Collect();
+        if (LevelBox.SelectedIndex == DatabaseLevel && profile.Database.Length == 0)
+            throw new InvalidOperationException("Укажите базу или выберите «К кластеру (без базы)».");
         var password = PasswordInput.Password.Length > 0 ? PasswordInput.Password : null;
         App.Connections.Save(profile, password);
         ReloadList(profile.Id);
@@ -317,7 +340,10 @@ public partial class ConnectionsEditor : UserControl
 
         Fill(profile);
         PasswordInput.Password = parsed.Password ?? string.Empty;
-        StatusLine.Text = "Поля заполнены из строки. Проверьте их и среду, затем сохраните.";
+        StatusLine.Text = (profile.IsClusterLevel
+                              ? "В строке нет базы — это подключение к КЛАСТЕРУ."
+                              : $"Это подключение к базе {profile.Database}.")
+                          + " Проверьте поля и среду, затем сохраните.";
     }
 
     private async void Test_Click(object sender, RoutedEventArgs e)
@@ -337,9 +363,11 @@ public partial class ConnectionsEditor : UserControl
             if (source.IsCancellationRequested)
                 return;
 
-            StatusLine.Text = $"Подключение работает: сервер {result.Server}, база {result.Database}."
+            StatusLine.Text = (profile.IsClusterLevel
+                                  ? $"Подключение к кластеру работает: сервер {result.Server}, база по умолчанию {result.Database}."
+                                  : $"Подключение работает: сервер {result.Server}, база {result.Database}.")
                               + (result.CanWrite
-                                  ? " Внимание: у этого логина есть права на запись — по возможности используйте логин только на чтение."
+                                  ? " Внимание: у логина есть права на запись."
                                   : string.Empty);
         }
         catch (Exception ex)

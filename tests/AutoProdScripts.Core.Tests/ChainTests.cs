@@ -192,7 +192,7 @@ public class ChainTests
 
         var chosen = await Run(chain, choose: request =>
         {
-            offered = request.Values.Count;
+            offered = request.Rows.Count;
             return Task.FromResult<int?>(1);
         });
         var refused = await Run(chain);
@@ -200,6 +200,43 @@ public class ChainTests
         Assert.Equal(2, offered);
         Assert.Equal(20, chosen[1].Result!.ResultSets[0].Rows[0][0]);
         Assert.Equal(ChainStepStatus.Failed, refused[1].Status);
+    }
+
+    [LocalDbFact]
+    public async Task OneRowIsChosenForAllParametersAndAllSteps()
+    {
+        var first = Step("SELECT * FROM (VALUES (1, 'a', 'x'), (2, 'b', 'x'), (2, 'b', 'y')) t(Id, Code, Other) ORDER BY Id, Other");
+        var second = Step("SELECT @id AS Id, @code AS Code");
+        second.Bindings = [From(first, "@id", "Id"), From(first, "@code", "Code")];
+        var third = Step("SELECT @code AS Code");
+        third.Bindings = [From(first, "@code", "Code")];
+        var requests = new List<ChoiceRequest>();
+
+        var results = await Run(Chain(first, second, third), choose: request =>
+        {
+            requests.Add(request);
+            return Task.FromResult<int?>(1);
+        });
+
+        var asked = Assert.Single(requests);
+        // Колонка Other никуда не передаётся, поэтому строки, различающиеся только ею, объединены.
+        Assert.Equal(2, asked.Rows.Count);
+        Assert.Equal(["Id", "Code", "Other"], asked.Columns);
+        Assert.Equal([1, 1, 2], asked.Uses.Select(u => u.StepIndex));
+        Assert.Equal([2, "b"], results[1].Result!.ResultSets[0].Rows[0]);
+        Assert.Equal("b", results[2].Result!.ResultSets[0].Rows[0][0]);
+    }
+
+    [LocalDbFact]
+    public async Task DoesNotAskWhenUsedColumnsAreTheSame()
+    {
+        var first = Step("SELECT * FROM (VALUES (7, 'x'), (7, 'y')) t(Id, Other)");
+        var second = Step("SELECT @id AS Id");
+        second.Bindings = [From(first, "@id", "Id")];
+
+        var results = await Run(Chain(first, second), choose: _ => throw new InvalidOperationException("не должен спрашивать"));
+
+        Assert.True(results[1].Status == ChainStepStatus.Succeeded, results[1].Message);
     }
 
     [LocalDbFact]

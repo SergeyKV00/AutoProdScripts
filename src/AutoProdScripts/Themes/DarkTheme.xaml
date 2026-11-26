@@ -4,6 +4,7 @@
   <SolidColorBrush x:Key="BgBrush" Color="#0B1626"/>
   <SolidColorBrush x:Key="PanelBrush" Color="#101C2E"/>
   <SolidColorBrush x:Key="PanelAltBrush" Color="#15263A"/>
+  <SolidColorBrush x:Key="GroupRowBrush" Color="#234670"/>
   <SolidColorBrush x:Key="BorderBrush" Color="#24364C"/>
   <SolidColorBrush x:Key="InputBrush" Color="#16283C"/>
   <SolidColorBrush x:Key="FgBrush" Color="#D6E2F0"/>

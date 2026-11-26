@@ -114,7 +114,7 @@ public partial class ChainView
         var sql = step is null ? string.Empty : StepEditor.Text;
         if (string.IsNullOrWhiteSpace(sql))
         {
-            SetStepCheck(step is null ? string.Empty : "Напишите SQL шага. Разрешено только чтение и временные таблицы.", "FgMutedBrush");
+            SetStepCheck(step is null ? string.Empty : "Напишите SQL шага.", "FgMutedBrush");
             return;
         }
 
@@ -236,8 +236,9 @@ public partial class ChainView
         copy.Group = string.Empty;
         step.Inline = copy;
         step.ScriptId = Guid.Empty;
-        if (step.ConnectionId is null && step.ConnectionName.Length == 0)
+        if (step.ConnectionId is null && step.ConnectionName.Length == 0 && step.RegionDatabase.Length == 0)
         {
+            step.RegionDatabase = source.RegionDatabase;
             step.ConnectionId = source.ConnectionId;
             step.ConnectionName = source.ConnectionName;
         }
@@ -363,6 +364,7 @@ public partial class ChainView
         script.Group = ScriptLibrary.NormalizeGroup(GroupBox.Text ?? string.Empty);
         script.ConnectionId = step.ConnectionId;
         script.ConnectionName = step.ConnectionName;
+        script.RegionDatabase = step.RegionDatabase.Trim();
         var analysis = ReadOnlyValidator.Analyze(script.Sql);
         script.Parameters = analysis.Parameters
             .Select(name =>
@@ -383,6 +385,7 @@ public partial class ChainView
         // Подключение теперь берётся из скрипта.
         step.ConnectionId = null;
         step.ConnectionName = string.Empty;
+        step.RegionDatabase = string.Empty;
         Structural();
     }
 }

@@ -404,7 +404,7 @@ public partial class SettingsWindow : Window
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e) =>
-        e.Cancel = !DatabaseConnections.ConfirmDiscard();
+        e.Cancel = !DatabaseConnections.ConfirmDiscard() || !DatabaseRegions.ConfirmDiscard();
 
     private void SettingsTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {

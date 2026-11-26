@@ -29,6 +29,18 @@ public sealed class ChainStep
 
     public string ConnectionName { get; set; } = string.Empty;
 
+    /// <summary>Шаг выполняется в базе выбранного при запуске региона.</summary>
+    public string RegionDatabase { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Шаблон базы региона для шага: свой, а если шагу не задано ни его, ни подключения — из скрипта.
+    /// Пусто — шаг идёт на обычное подключение.
+    /// </summary>
+    public string EffectiveRegionDatabase(LibraryScript script) =>
+        RegionDatabase.Length > 0 ? RegionDatabase
+        : ConnectionName.Length > 0 || ConnectionId is not null ? string.Empty
+        : script.RegionDatabase;
+
     /// <summary>Не выполнять следующие шаги, если этот не вернул ни одной строки.</summary>
     public bool StopWhenEmpty { get; set; } = true;
 
@@ -57,7 +69,7 @@ public sealed class LibraryChain : LibraryItem
 
     internal override bool IsComplete =>
         base.IsComplete && Parameters is not null && Steps is not null
-        && Steps.All(s => s is { ConnectionName: not null, EmptyMessage: not null, OutputTable: not null, Bindings: not null }
+        && Steps.All(s => s is { ConnectionName: not null, RegionDatabase: not null, EmptyMessage: not null, OutputTable: not null, Bindings: not null }
                           && s.Inline is null or { IsComplete: true });
 
     public LibraryChain Clone()

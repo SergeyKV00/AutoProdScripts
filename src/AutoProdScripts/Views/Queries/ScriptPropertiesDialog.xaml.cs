@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using AutoProdScripts.Core.Execution;
 using AutoProdScripts.Core.Library;
+using AutoProdScripts.Core.Regions;
 
 namespace AutoProdScripts.Views.Queries;
 
@@ -34,9 +35,18 @@ public partial class ScriptPropertiesDialog : Window
         var current = ScriptConnection.Resolve(_script, connections);
         ConnectionBox.Items.Add(new ComboBoxItem { Content = "(не задано)" });
         ConnectionBox.SelectedIndex = 0;
+        var byRegion = new ComboBoxItem { Content = "🌍 " + RegionTargets.Title, Tag = "regions" };
+        ConnectionBox.Items.Add(byRegion);
+        RegionTemplateBox.Text = _script.RegionDatabase.Length > 0 ? _script.RegionDatabase : "KMIS";
+        if (_script.RegionDatabase.Length > 0)
+        {
+            ConnectionBox.SelectedItem = byRegion;
+            current = null;
+        }
+
         foreach (var profile in connections)
         {
-            var item = new ComboBoxItem { Content = profile.Name, Tag = (profile.Id, profile.Name) };
+            var item = new ComboBoxItem { Content = EnvironmentUi.Option(profile), Tag = (profile.Id, profile.Name) };
             ConnectionBox.Items.Add(item);
             if (profile.Id == current?.Id)
                 ConnectionBox.SelectedItem = item;
@@ -55,12 +65,16 @@ public partial class ScriptPropertiesDialog : Window
         }
     }
 
+    private bool ByRegion => (ConnectionBox.SelectedItem as ComboBoxItem)?.Tag is "regions";
+
+    private void Connection_Changed(object sender, SelectionChangedEventArgs e) =>
+        RegionPanel.Visibility = ByRegion ? Visibility.Visible : Visibility.Collapsed;
+
     private void FillParameters()
     {
         ParametersHint.Text = _script.Parameters.Count == 0
             ? "В скрипте нет параметров."
-            : "Подпись, тип и значение по умолчанию. Значение по умолчанию хранится в файле скрипта — "
-              + "не записывайте туда персональные данные и пароли. Пустое поле — значения нет.";
+            : "Не храните в значениях по умолчанию личные данные и пароли.";
 
         if (_script.Parameters.Count == 0)
             return;
@@ -116,6 +130,13 @@ public partial class ScriptPropertiesDialog : Window
         {
             script.ConnectionId = null;
             script.ConnectionName = string.Empty;
+        }
+
+        script.RegionDatabase = ByRegion ? RegionTemplateBox.Text.Trim() : string.Empty;
+        if (ByRegion && RegionDatabase.Validate(script.RegionDatabase) is { } problem)
+        {
+            ErrorText.Text = problem;
+            return;
         }
 
         try
