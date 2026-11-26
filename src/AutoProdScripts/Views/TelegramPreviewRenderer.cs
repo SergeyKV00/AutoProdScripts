@@ -7,7 +7,8 @@ namespace AutoProdScripts.Views;
 
 public static class TelegramPreviewRenderer
 {
-    public const string DemoText = "Скрипты по заявкам";
+    public const string DemoText =
+        "Скрипты по заявкам https://cit-damu.visualstudio.com/Damumed/_workitems/edit/97313/";
     public const string DemoUrl = "https://dev.azure.com/preview/pullrequest";
 
     public static Run? Render(
@@ -22,15 +23,19 @@ public static class TelegramPreviewRenderer
         Action<string>? openLink,
         IEnumerable<TelegramTimeTextRule>? timeTexts = null,
         string? timeZoneId = null,
-        DateTimeOffset? now = null)
+        DateTimeOffset? now = null,
+        IEnumerable<LinkTemplateRule>? linkTemplates = null,
+        string? linkSourceText = null,
+        IReadOnlyList<IReadOnlyList<FormattedLink>>? autoLinkLines = null)
     {
         Run? tagsRun = null;
-        foreach (var part in TelegramMessage.Parts(template, text, linkCaption, tags, custom, timeTexts, timeZoneId, now))
+        foreach (var part in TelegramMessage.Parts(
+                     template, text, linkCaption, tags, custom, timeTexts, timeZoneId, now, linkTemplates, linkSourceText, autoLinkLines))
         {
             switch (part.Kind)
             {
                 case TelegramPartKind.Link:
-                    paragraph.Inlines.Add(CreateLink(part.Value, linkUrl, linkBrush, openLink));
+                    paragraph.Inlines.Add(CreateLink(part.Value, part.Url ?? linkUrl, linkBrush, openLink));
                     break;
                 case TelegramPartKind.Tags:
                     tagsRun = new Run(part.Value);

@@ -137,6 +137,16 @@
                        Text="{}{base} — база, {yyyyMMddHHmm} — дата и время, также {yyyy} {MM} {dd} {HH} {mm}."/>
             <TextBlock x:Name="BranchPreviewText" TextWrapping="Wrap" Foreground="{StaticResource FgInfoBrush}" Margin="0,0,0,12"/>
 
+            <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+              <StackPanel>
+                <CheckBox x:Name="AutoCompleteBox" Content="Ставить Auto-complete"
+                          Foreground="{StaticResource FgBrush}" FontWeight="SemiBold"/>
+                <TextBlock TextWrapping="Wrap" Margin="20,6,0,0" Foreground="{StaticResource FgMutedBrush}"
+                           Text="После создания pull request Azure DevOps завершит его сам, когда политики ветки будут выполнены. Если pull request уже был активен, флаг не меняется."/>
+              </StackPanel>
+            </Border>
+
             <Border Background="{StaticResource PanelAltBrush}"
                     BorderBrush="{StaticResource AccentBrush}"
                     BorderThickness="2" CornerRadius="6" Padding="14" Margin="0,8,0,16">
@@ -182,7 +192,7 @@
                     </DockPanel>
                     <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" Margin="0,6,0,0"
                                Foreground="{StaticResource FgMutedBrush}"
-                               Text="Переменные можно ставить в любое место. {link} — ссылка на PR, {tags} — получатели, {timeText} — текст по времени суток."/>
+                               Text="Переменные можно ставить в любое место. {link} — ссылка на PR, {tags} — получатели, {timeText} — текст по времени, {autoLink} — список ссылок из окна результата (по шаблонам конструктора)."/>
                     <TextBox x:Name="TelegramTemplateBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
                              VerticalScrollBarVisibility="Auto" TextChanged="AutoTemplate_Changed"/>
                   </DockPanel>
@@ -263,6 +273,90 @@
             </Grid>
           </StackPanel>
         </ScrollViewer>
+      </TabItem>
+      <TabItem x:Name="LinkTemplatesTab" Header="Конструктор ссылок">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="12"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+
+          <Border Grid.Column="0" Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1" CornerRadius="6" Padding="12">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Top" Text="Шаблоны ссылок" FontWeight="SemiBold" Margin="0,0,0,8"
+                         Foreground="{StaticResource FgBrush}"/>
+              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+                <Button Content="Добавить" Click="AddLinkTemplate_Click" Width="110"/>
+                <Button Content="Удалить" Click="RemoveLinkTemplate_Click" Style="{StaticResource SecondaryButton}"
+                        Width="110" Margin="8,0,0,0"/>
+              </StackPanel>
+              <ListBox x:Name="LinkTemplatesList" SelectionChanged="LinkTemplatesList_SelectionChanged"
+                       Background="{StaticResource PanelBrush}" BorderThickness="0"
+                       Foreground="{StaticResource FgBrush}" DisplayMemberPath="Name"/>
+            </DockPanel>
+          </Border>
+
+          <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="LinkTemplateEditor" IsEnabled="False">
+              <TextBlock Text="Настройка шаблона" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8"
+                         Foreground="{StaticResource FgBrush}"/>
+              <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgMutedBrush}" Margin="0,0,0,12"
+                         Text="Вставьте пример ссылки, выделите в ней фрагмент мышью и нажмите «Как якорь» для сопоставления или «Как значение»."/>
+
+              <Label Content="Название"/>
+              <TextBox x:Name="LinkTemplateNameBox" TextChanged="LinkTemplateEditor_Changed"/>
+
+              <Label Content="Пример ссылки" Margin="0,8,0,0"/>
+              <TextBox x:Name="LinkTemplateSampleBox" TextChanged="LinkTemplateSample_Changed"
+                       TextWrapping="Wrap" AcceptsReturn="False" MinHeight="48" Margin="0,0,0,8"/>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <Button Content="Как якорь" Click="AddAnchorFromSelection_Click" Width="120"/>
+                <Button Content="Как значение" Click="AddCaptureFromSelection_Click" Width="130" Margin="8,0,0,0"/>
+              </StackPanel>
+
+              <TextBlock Text="Якоря и значения" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}" Margin="0,0,0,4"/>
+              <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgMutedBrush}" Margin="0,0,0,8"
+                         Text="Порядок в списке задаёт порядок поиска в ссылке. Кнопки ↑ ↓ меняют порядок."/>
+              <StackPanel x:Name="LinkMarkersHost" Margin="0,0,0,12"/>
+              <TextBlock x:Name="LinkMarkersEmptyText" TextWrapping="Wrap" Margin="0,0,0,12"
+                         Foreground="{StaticResource FgMutedBrush}"
+                         Text="Пока ничего не добавлено. Выделите, например, cit-damu.visualstudio.com и нажмите «Как якорь»."/>
+
+              <Label Content="Формат результата"/>
+              <DockPanel Margin="0,0,0,6">
+                <Button DockPanel.Dock="Right" Content="{}{header}…{/header}" Click="InsertFormatHeader_Click"
+                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0" Padding="8,4"
+                        ToolTip="Заголовок списка: при «Формировать ссылки» выводится один раз"/>
+                <Button DockPanel.Dock="Right" Content="{}{text}…{/text}" Click="InsertFormatText_Click"
+                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0" Padding="8,4"
+                        ToolTip="Обычный текст без ссылки"/>
+                <TextBox x:Name="LinkTemplateFormatBox" TextChanged="LinkTemplateEditor_Changed"/>
+              </DockPanel>
+              <TextBlock x:Name="LinkTemplateFormatHint" TextWrapping="Wrap" Margin="0,0,0,8"
+                         Foreground="{StaticResource FgMutedBrush}"
+                         Text="{}Пример: {header}HD: {/header}{value}. Без маркеров весь текст — ссылка (как раньше). {url} — полный адрес."/>
+
+              <CheckBox x:Name="LinkTemplateCombineBox" Content="Формировать ссылки"
+                        Margin="0,4,0,4" Foreground="{StaticResource FgBrush}" FontWeight="SemiBold"
+                        Checked="LinkTemplateCombine_Changed" Unchecked="LinkTemplateCombine_Changed"/>
+              <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FgMutedBrush}" Margin="0,0,0,12"
+                         Text="{}Если включено, ссылки одного шаблона идут в одной строке через запятую. Заголовок {header} при этом показывается один раз: HD: 97313, 97314."/>
+
+              <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                      BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,8,0,0">
+                <StackPanel>
+                  <TextBlock Text="Предпросмотр" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
+                  <TextBlock x:Name="LinkTemplatePreviewText" TextWrapping="Wrap" Margin="0,8,0,0"
+                             Foreground="{StaticResource FgInfoBrush}" Text="—"/>
+                  <TextBlock x:Name="LinkTemplateErrorText" TextWrapping="Wrap" Margin="0,8,0,0"
+                             Foreground="IndianRed" Visibility="Collapsed"/>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
       </TabItem>
     </TabControl>
   </DockPanel>

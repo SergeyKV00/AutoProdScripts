@@ -115,8 +115,12 @@ public static class TelegramMessage
         IEnumerable<TelegramCustomTemplate>? custom = null,
         IEnumerable<TelegramTimeTextRule>? timeTexts = null,
         string? timeZoneId = null,
-        DateTimeOffset? now = null) =>
-        string.Concat(Parts(template, text, linkCaption, tags, custom, timeTexts, timeZoneId, now).Select(part => part.Value)).Trim();
+        DateTimeOffset? now = null,
+        IEnumerable<LinkTemplateRule>? linkTemplates = null,
+        string? linkSourceText = null,
+        IReadOnlyList<IReadOnlyList<FormattedLink>>? autoLinkLines = null) =>
+        string.Concat(Parts(template, text, linkCaption, tags, custom, timeTexts, timeZoneId, now, linkTemplates, linkSourceText, autoLinkLines)
+            .Select(part => part.Value)).Trim();
 
     public static IReadOnlyList<TelegramPart> Parts(
         string? template,
@@ -126,10 +130,17 @@ public static class TelegramMessage
         IEnumerable<TelegramCustomTemplate>? custom = null,
         IEnumerable<TelegramTimeTextRule>? timeTexts = null,
         string? timeZoneId = null,
-        DateTimeOffset? now = null)
+        DateTimeOffset? now = null,
+        IEnumerable<LinkTemplateRule>? linkTemplates = null,
+        string? linkSourceText = null,
+        IReadOnlyList<IReadOnlyList<FormattedLink>>? autoLinkLines = null)
     {
         var timeText = ResolveTimeText(timeTexts, timeZoneId, now);
-        return Tokenize(ExpandCustom(template, custom), text, linkCaption, tags, timeText);
+        var lines = autoLinkLines
+                    ?? LinkTemplateEngine.BuildDisplayLinesFromText(
+                        string.IsNullOrWhiteSpace(linkSourceText) ? text : linkSourceText,
+                        linkTemplates);
+        return Tokenize(ExpandCustom(template, custom), text, linkCaption, tags, timeText, lines);
     }
 
     public static string ResolveTimeText(
@@ -192,25 +203,72 @@ public static class TelegramMessage
         return TimeZoneInfo.Local;
     }
 
+    private static readonly Regex TokenPattern = new(@"\{([^{}]+)\}", RegexOptions.Compiled);
+
     public static string ExpandBase(string body, string text, string linkCaption, string? tags) =>
-        string.Concat(Tokenize(body, text, linkCaption, tags, string.Empty).Select(part => part.Value));
+        string.Concat(Tokenize(body, text, linkCaption, tags, string.Empty, Array.Empty<IReadOnlyList<FormattedLink>>())
+            .Select(part => part.Value));
 
     private static IReadOnlyList<TelegramPart> Tokenize(
         string body,
         string text,
         string? linkCaption,
         string? tags,
-        string timeText)
+        string timeText,
+        IReadOnlyList<IReadOnlyList<FormattedLink>> autoLinkLines)
+    {
+        // Строка шаблона, где после подстановки остались только пустые теги ({autoLink}, {tags}…),
+        // не должна оставлять пустую строку в сообщении.
+        var rawLines = body.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n');
+        var result = new List<TelegramPart>();
+        var emitted = false;
+        foreach (var rawLine in rawLines)
+        {
+            var lineParts = TokenizeLine(rawLine, text, linkCaption, tags, timeText, autoLinkLines);
+            if (IsVisuallyEmpty(lineParts))
+            {
+                if (LineContainsToken(rawLine))
+                    continue;
+                // Пустая строка без тегов — сохраняем как осознанный разрыв, кроме ведущих пустых.
+                if (!emitted)
+                    continue;
+                result.Add(new TelegramPart(TelegramPartKind.Text, "\n"));
+                continue;
+            }
+
+            if (emitted)
+                result.Add(new TelegramPart(TelegramPartKind.Text, "\n"));
+            result.AddRange(lineParts);
+            emitted = true;
+        }
+
+        // Хвостовые пустые строки после удалённых тегов не оставляем.
+        while (result.Count > 0
+               && result[^1].Kind == TelegramPartKind.Text
+               && result[^1].Value is "\n" or "\r\n")
+            result.RemoveAt(result.Count - 1);
+
+        return result;
+    }
+
+    private static IReadOnlyList<TelegramPart> TokenizeLine(
+        string line,
+        string text,
+        string? linkCaption,
+        string? tags,
+        string timeText,
+        IReadOnlyList<IReadOnlyList<FormattedLink>> autoLinkLines)
     {
         var caption = AutoPrTemplate.LinkCaptionOrDefault(linkCaption);
         var formattedTags = FormatTags(tags);
-        var pattern = new Regex(@"\{([^{}]+)\}");
         var parts = new List<TelegramPart>();
         var index = 0;
-        foreach (Match match in pattern.Matches(body))
+        foreach (Match match in TokenPattern.Matches(line))
         {
             if (match.Index > index)
-                parts.Add(new TelegramPart(TelegramPartKind.Text, body[index..match.Index]));
+                parts.Add(new TelegramPart(TelegramPartKind.Text, line[index..match.Index]));
 
             var key = match.Groups[1].Value.Trim();
             if (key.Equals("link", StringComparison.OrdinalIgnoreCase))
@@ -219,6 +277,8 @@ public static class TelegramMessage
                 parts.Add(new TelegramPart(TelegramPartKind.Tags, formattedTags));
             else if (key.Equals("timeText", StringComparison.OrdinalIgnoreCase))
                 parts.Add(new TelegramPart(TelegramPartKind.Text, timeText ?? string.Empty));
+            else if (key.Equals("autoLink", StringComparison.OrdinalIgnoreCase))
+                AppendAutoLinks(parts, autoLinkLines);
             else if (key.Equals("text", StringComparison.OrdinalIgnoreCase) ||
                      key.Equals("title", StringComparison.OrdinalIgnoreCase))
                 parts.Add(new TelegramPart(TelegramPartKind.Text, text ?? string.Empty));
@@ -228,9 +288,76 @@ public static class TelegramMessage
             index = match.Index + match.Length;
         }
 
-        if (index < body.Length)
-            parts.Add(new TelegramPart(TelegramPartKind.Text, body[index..]));
+        if (index < line.Length)
+            parts.Add(new TelegramPart(TelegramPartKind.Text, line[index..]));
         return parts;
+    }
+
+    private static bool LineContainsToken(string line) => TokenPattern.IsMatch(line);
+
+    private static bool IsVisuallyEmpty(IReadOnlyList<TelegramPart> parts)
+    {
+        foreach (var part in parts)
+        {
+            if (!string.IsNullOrWhiteSpace(part.Value))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static void AppendAutoLinks(
+        List<TelegramPart> parts,
+        IReadOnlyList<IReadOnlyList<FormattedLink>> autoLinkLines)
+    {
+        for (var lineIndex = 0; lineIndex < autoLinkLines.Count; lineIndex++)
+        {
+            if (lineIndex > 0)
+                parts.Add(new TelegramPart(TelegramPartKind.Text, "\n"));
+
+            var line = autoLinkLines[lineIndex];
+            var combined = line.Count > 1;
+            for (var i = 0; i < line.Count; i++)
+            {
+                if (i > 0)
+                    parts.Add(new TelegramPart(TelegramPartKind.Text, ", "));
+                AppendFormattedLinkParts(parts, line[i], includeHeader: !combined || i == 0);
+            }
+        }
+    }
+
+    private static void AppendFormattedLinkParts(
+        List<TelegramPart> parts,
+        FormattedLink item,
+        bool includeHeader)
+    {
+        var formatParts = item.Parts;
+        if (formatParts.Count == 0)
+        {
+            var text = item.Matched ? item.Caption : item.Url;
+            parts.Add(new TelegramPart(TelegramPartKind.Link, text, item.Url));
+            return;
+        }
+
+        foreach (var part in formatParts)
+        {
+            if (part.Kind == LinkFormatPartKind.Header && !includeHeader)
+                continue;
+            if (string.IsNullOrEmpty(part.Value))
+                continue;
+
+            if (part.Kind == LinkFormatPartKind.Link)
+                parts.Add(new TelegramPart(TelegramPartKind.Link, part.Value, item.Url));
+            else
+                parts.Add(new TelegramPart(TelegramPartKind.Text, part.Value));
+        }
+    }
+
+    public static bool TemplateContainsAutoLink(string? template)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+            return false;
+        return Regex.IsMatch(template, @"\{autoLink\}", RegexOptions.IgnoreCase);
     }
 
     private static string ReplaceToken(string body, string name, string value)
@@ -247,4 +374,4 @@ public enum TelegramPartKind
     Tags
 }
 
-public readonly record struct TelegramPart(TelegramPartKind Kind, string Value);
+public readonly record struct TelegramPart(TelegramPartKind Kind, string Value, string? Url = null);

@@ -1965,6 +1965,19 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (settings.AutoCompletePullRequest && pr.PullRequestId is int pullRequestId)
+            {
+                var autoComplete = await client.EnableAutoCompleteAsync(pullRequestId, pr.CreatedById);
+                var note = autoComplete.Ok
+                    ? " Auto-complete включён."
+                    : $" Auto-complete не включён: {autoComplete.Message}";
+                pr = pr with { Message = pr.Message + note };
+                if (autoComplete.Ok)
+                    App.Log.Info("auto-complete включён");
+                else
+                    App.Log.Warn("auto-complete не включён: " + autoComplete.Message);
+            }
+
             App.Log.Info(pr.Message + (pr.Url is null ? string.Empty : $" {pr.Url}"));
             SetStatus("PR создан");
         }
@@ -1997,7 +2010,8 @@ public partial class MainWindow : Window
                 Tags = settings.TelegramTags ?? string.Empty,
                 Custom = settings.TelegramCustomTemplates,
                 TimeTexts = settings.TelegramTimeTexts,
-                TimeZoneId = settings.TelegramTimeZoneId
+                TimeZoneId = settings.TelegramTimeZoneId,
+                LinkTemplates = settings.LinkTemplates
             })
         { Owner = this }.ShowDialog();
     }

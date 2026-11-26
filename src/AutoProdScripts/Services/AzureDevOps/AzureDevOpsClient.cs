@@ -178,17 +178,77 @@ public sealed class AzureDevOpsClient : IDisposable
             var root = doc.RootElement;
             var id = root.TryGetProperty("pullRequestId", out var idProp) ? idProp.GetInt32() : (int?)null;
             var url = BuildPrWebUrl(id);
+            var createdById = TryReadIdentityId(root, "createdBy");
 
             return new PullRequestResult(
                 true,
                 id,
                 url,
-                id.HasValue ? $"Pull Request #{id} создан." : "Pull Request создан.");
+                id.HasValue ? $"Pull Request #{id} создан." : "Pull Request создан.",
+                CreatedById: createdById);
         }
         catch (Exception ex)
         {
             return new PullRequestResult(false, null, null, $"Ошибка Create PR: {ex.Message}");
         }
+    }
+
+    public async Task<(bool Ok, string Message)> EnableAutoCompleteAsync(
+        int pullRequestId,
+        string? userId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                userId = await GetAuthenticatedUserIdAsync(ct).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(userId))
+                return (false, "не удалось определить учётную запись Azure DevOps.");
+
+            var apiUrl =
+                $"{_orgUrl}/{Uri.EscapeDataString(_project)}/_apis/git/repositories/{Uri.EscapeDataString(_repo)}/pullrequests/{pullRequestId}?api-version=7.1";
+            var payload = new Dictionary<string, object?>
+            {
+                ["autoCompleteSetBy"] = new Dictionary<string, string> { ["id"] = userId }
+            };
+            var json = JsonSerializer.Serialize(payload);
+            using var request = new HttpRequestMessage(HttpMethod.Patch, apiUrl)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
+            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return (false, $"{(int)response.StatusCode} {response.ReasonPhrase}. {TrimBody(body)}");
+
+            return (true, "Auto-complete включён.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private async Task<string?> GetAuthenticatedUserIdAsync(CancellationToken ct)
+    {
+        var url = $"{_orgUrl}/_apis/connectionData?api-version=7.1-preview.1";
+        using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(body);
+        return TryReadIdentityId(doc.RootElement, "authenticatedUser");
+    }
+
+    private static string? TryReadIdentityId(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var identity))
+            return null;
+        if (!identity.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String)
+            return null;
+        var value = id.GetString();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     public string BuildPrWebUrl(int? pullRequestId)

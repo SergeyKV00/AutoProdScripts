@@ -21,6 +21,8 @@ public partial class SettingsWindow : Window
     private readonly List<CustomTemplateRow> _customTemplates = new();
     private readonly List<string> _recipients = new();
     private readonly List<TimeTextRow> _timeTextRows = new();
+    private readonly List<LinkTemplateRule> _linkTemplates = new();
+    private bool _linkEditorSilent;
 
     public AppSettings? ResultSettings { get; private set; }
     public string? ResultPat { get; private set; }
@@ -62,6 +64,8 @@ public partial class SettingsWindow : Window
             if (!string.IsNullOrWhiteSpace(part.Name))
                 AddCustomTemplateRow(part.Name.Trim(), part.Value);
         }
+        AutoCompleteBox.IsChecked = s.AutoCompletePullRequest;
+        LoadLinkTemplates(s.LinkTemplates);
         UpdateAutoReviewersLabel();
         RefreshTokenMenu();
         UpdateAutoPreview();
@@ -351,6 +355,13 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        CommitLinkTemplateEditor();
+        if (!TryValidateLinkTemplates(out var linkTemplates))
+        {
+            SettingsTabs.SelectedItem = LinkTemplatesTab;
+            return;
+        }
+
         var previewLength = TelegramMessage.Build(
             TelegramTemplateBox.Text,
             TelegramPreviewRenderer.DemoText,
@@ -358,7 +369,9 @@ public partial class SettingsWindow : Window
             string.Join(' ', _recipients),
             CurrentCustomTemplates(),
             timeTexts,
-            SelectedTimeZoneId()).Length;
+            SelectedTimeZoneId(),
+            linkTemplates: linkTemplates,
+            linkSourceText: TelegramPreviewRenderer.DemoText).Length;
         if (previewLength > AutoPrTemplate.TelegramMaxLength)
         {
             MessageBox.Show(this, $"Сообщение длиннее {AutoPrTemplate.TelegramMaxLength} символов — Telegram его не примет.",
@@ -391,6 +404,8 @@ public partial class SettingsWindow : Window
                 .Select(row => new TelegramCustomTemplate { Name = row.Name, Value = row.ValueBox.Text })
                 .ToList(),
             AutoReviewers = _autoReviewers.Select(r => r.Copy()).ToList(),
+            AutoCompletePullRequest = AutoCompleteBox.IsChecked == true,
+            LinkTemplates = linkTemplates,
             AutoPrTemplateConfigured = App.Settings.Current.AutoPrTemplateConfigured
                 || (_autoTemplateTouched
                     && !string.IsNullOrWhiteSpace(AutoBaseBranchBox.Text)
@@ -425,6 +440,8 @@ public partial class SettingsWindow : Window
         var custom = CurrentCustomTemplates();
         var timeTexts = CurrentTimeTexts();
         var timeZoneId = SelectedTimeZoneId();
+        CommitLinkTemplateEditor();
+        var linkTemplates = _linkTemplates.Select(r => r.Copy()).ToList();
         var message = TelegramMessage.Build(
             TelegramTemplateBox.Text,
             TelegramPreviewRenderer.DemoText,
@@ -432,7 +449,9 @@ public partial class SettingsWindow : Window
             string.Join(' ', _recipients),
             custom,
             timeTexts,
-            timeZoneId);
+            timeZoneId,
+            linkTemplates: linkTemplates,
+            linkSourceText: TelegramPreviewRenderer.DemoText);
         var count = message.Length;
         TelegramCountText.Text = $"{count} / {AutoPrTemplate.TelegramMaxLength}";
         TelegramCountText.Foreground = (Brush)FindResource(count > AutoPrTemplate.TelegramMaxLength ? "FgBrush" : "FgMutedBrush");
@@ -451,7 +470,9 @@ public partial class SettingsWindow : Window
             (Brush)FindResource("FgInfoBrush"),
             openLink: null,
             timeTexts,
-            timeZoneId);
+            timeZoneId,
+            linkTemplates: linkTemplates,
+            linkSourceText: TelegramPreviewRenderer.DemoText);
         if (TelegramTimeTextNow is not null)
         {
             var zone = TelegramMessage.ResolveTimeZone(timeZoneId);
@@ -490,6 +511,7 @@ public partial class SettingsWindow : Window
         AddTokenItem(menu, "link", "{link} — ссылка на PR");
         AddTokenItem(menu, "tags", "{tags} — получатели");
         AddTokenItem(menu, "timeText", "{timeText} — текст по времени суток");
+        AddTokenItem(menu, "autoLink", "{autoLink} — список ссылок из окна результата");
         AddTokenItem(menu, "text", "{text} — описание скриптов, необязательно");
     }
 
@@ -853,7 +875,8 @@ public partial class SettingsWindow : Window
             name.Equals("title", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("link", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("tags", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("timeText", StringComparison.OrdinalIgnoreCase))
+            name.Equals("timeText", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("autoLink", StringComparison.OrdinalIgnoreCase))
             return false;
         return name.All(ch => char.IsLetterOrDigit(ch) || ch == '_') && char.IsLetter(name[0]);
     }
@@ -975,5 +998,483 @@ public partial class SettingsWindow : Window
         _autoReviewers = dialog.SelectedReviewers.Select(r => r.Copy()).ToList();
         _autoTemplateTouched = true;
         UpdateAutoReviewersLabel();
+    }
+
+    private void LoadLinkTemplates(IEnumerable<LinkTemplateRule>? rules)
+    {
+        _linkTemplates.Clear();
+        foreach (var rule in rules ?? Array.Empty<LinkTemplateRule>())
+        {
+            var copy = rule.Copy();
+            if (string.IsNullOrWhiteSpace(copy.Name))
+                copy.Name = "Шаблон";
+            _linkTemplates.Add(copy);
+        }
+
+        RefreshLinkTemplatesList(selectIndex: _linkTemplates.Count > 0 ? 0 : -1);
+    }
+
+    private void RefreshLinkTemplatesList(int selectIndex)
+    {
+        if (LinkTemplatesList is null)
+            return;
+        LinkTemplatesList.ItemsSource = null;
+        LinkTemplatesList.ItemsSource = _linkTemplates;
+        if (selectIndex >= 0 && selectIndex < _linkTemplates.Count)
+            LinkTemplatesList.SelectedIndex = selectIndex;
+        else
+            LinkTemplatesList.SelectedIndex = -1;
+        UpdateLinkTemplateEditorEnabled();
+    }
+
+    private LinkTemplateRule? SelectedLinkTemplate() =>
+        LinkTemplatesList?.SelectedItem as LinkTemplateRule;
+
+    private void UpdateLinkTemplateEditorEnabled()
+    {
+        if (LinkTemplateEditor is null)
+            return;
+        LinkTemplateEditor.IsEnabled = SelectedLinkTemplate() is not null;
+        if (SelectedLinkTemplate() is null)
+            ClearLinkTemplateEditor();
+    }
+
+    private void ClearLinkTemplateEditor()
+    {
+        _linkEditorSilent = true;
+        try
+        {
+            if (LinkTemplateNameBox is not null)
+                LinkTemplateNameBox.Text = string.Empty;
+            if (LinkTemplateSampleBox is not null)
+                LinkTemplateSampleBox.Text = string.Empty;
+            if (LinkTemplateFormatBox is not null)
+                LinkTemplateFormatBox.Text = string.Empty;
+            if (LinkTemplateCombineBox is not null)
+                LinkTemplateCombineBox.IsChecked = false;
+            LinkMarkersHost?.Children.Clear();
+            if (LinkMarkersEmptyText is not null)
+                LinkMarkersEmptyText.Visibility = Visibility.Visible;
+            if (LinkTemplatePreviewText is not null)
+                LinkTemplatePreviewText.Text = "—";
+            if (LinkTemplateErrorText is not null)
+            {
+                LinkTemplateErrorText.Text = string.Empty;
+                LinkTemplateErrorText.Visibility = Visibility.Collapsed;
+            }
+            if (LinkTemplateFormatHint is not null)
+                LinkTemplateFormatHint.Text =
+                    "Подставьте имена значений в фигурных скобках, например HD: {value}. Можно использовать {url}.";
+        }
+        finally
+        {
+            _linkEditorSilent = false;
+        }
+    }
+
+    private void LinkTemplatesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_linkEditorSilent)
+            return;
+        LoadSelectedLinkTemplateIntoEditor();
+    }
+
+    private void LoadSelectedLinkTemplateIntoEditor()
+    {
+        var rule = SelectedLinkTemplate();
+        if (rule is null)
+        {
+            UpdateLinkTemplateEditorEnabled();
+            return;
+        }
+
+        _linkEditorSilent = true;
+        try
+        {
+            LinkTemplateEditor.IsEnabled = true;
+            LinkTemplateNameBox.Text = rule.Name;
+            LinkTemplateSampleBox.Text = rule.SampleUrl;
+            LinkTemplateFormatBox.Text = string.IsNullOrWhiteSpace(rule.Format) ? "HD: {value}" : rule.Format;
+            LinkTemplateCombineBox.IsChecked = rule.CombineLinks;
+            RenderLinkMarkers(rule);
+            UpdateLinkTemplatePreview(rule);
+        }
+        finally
+        {
+            _linkEditorSilent = false;
+        }
+    }
+
+    private void AddLinkTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        CommitLinkTemplateEditor();
+        var rule = new LinkTemplateRule
+        {
+            Name = "Новый шаблон",
+            SampleUrl = "https://cit-damu.visualstudio.com/Damumed/_workitems/edit/97313/",
+            Format = "{header}HD: {/header}{value}",
+            Markers = new List<LinkTemplateMarker>()
+        };
+        _linkTemplates.Add(rule);
+        RefreshLinkTemplatesList(_linkTemplates.Count - 1);
+        LoadSelectedLinkTemplateIntoEditor();
+        UpdateAutoPreview();
+    }
+
+    private void RemoveLinkTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        var index = LinkTemplatesList.SelectedIndex;
+        if (index < 0 || index >= _linkTemplates.Count)
+            return;
+        _linkTemplates.RemoveAt(index);
+        RefreshLinkTemplatesList(Math.Min(index, _linkTemplates.Count - 1));
+        LoadSelectedLinkTemplateIntoEditor();
+        UpdateAutoPreview();
+    }
+
+    private void AddAnchorFromSelection_Click(object sender, RoutedEventArgs e) =>
+        AddMarkerFromSelection(LinkMarkerKind.Anchor);
+
+    private void AddCaptureFromSelection_Click(object sender, RoutedEventArgs e) =>
+        AddMarkerFromSelection(LinkMarkerKind.Capture);
+
+    private void AddMarkerFromSelection(LinkMarkerKind kind)
+    {
+        var rule = SelectedLinkTemplate();
+        if (rule is null)
+            return;
+
+        CommitLinkTemplateEditor();
+        var sample = LinkTemplateSampleBox.Text ?? string.Empty;
+        var start = LinkTemplateSampleBox.SelectionStart;
+        var length = LinkTemplateSampleBox.SelectionLength;
+        if (length <= 0 || start < 0 || start + length > sample.Length)
+        {
+            MessageBox.Show(this, "Выделите фрагмент в примере ссылки.",
+                "Конструктор ссылок", MessageBoxButton.OK, MessageBoxImage.Information);
+            LinkTemplateSampleBox.Focus();
+            return;
+        }
+
+        var text = sample.Substring(start, length);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            MessageBox.Show(this, "Выделите непустой фрагмент.",
+                "Конструктор ссылок", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (kind == LinkMarkerKind.Capture
+            && rule.Markers.Any(m =>
+                m.Kind == LinkMarkerKind.Capture
+                && LinkTemplateEngine.RangesOverlap(m.Start, m.Length, start, length)))
+        {
+            MessageBox.Show(this, "Это значение пересекается с другим значением. Выберите другой фрагмент.",
+                "Конструктор ссылок", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        rule.SampleUrl = sample;
+        rule.Markers.Add(new LinkTemplateMarker
+        {
+            Start = start,
+            Length = length,
+            Text = text,
+            Kind = kind,
+            CaptureName = kind == LinkMarkerKind.Capture
+                ? LinkTemplateEngine.NextCaptureName(rule.Markers)
+                : string.Empty
+        });
+        RenderLinkMarkers(rule);
+        UpdateLinkTemplatePreview(rule);
+        UpdateAutoPreview();
+    }
+
+    private void LinkTemplateSample_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (_linkEditorSilent)
+            return;
+        var rule = SelectedLinkTemplate();
+        if (rule is null)
+            return;
+
+        var sample = LinkTemplateSampleBox.Text ?? string.Empty;
+        rule.SampleUrl = sample;
+        // Drop markers that no longer match the sample at their positions.
+        rule.Markers.RemoveAll(m =>
+            m.Start < 0
+            || m.Length <= 0
+            || m.Start + m.Length > sample.Length
+            || !string.Equals(sample.Substring(m.Start, m.Length), m.Text, StringComparison.Ordinal));
+        RenderLinkMarkers(rule);
+        UpdateLinkTemplatePreview(rule);
+        UpdateAutoPreview();
+    }
+
+    private void LinkTemplateEditor_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (_linkEditorSilent)
+            return;
+        CommitLinkTemplateEditor();
+        var rule = SelectedLinkTemplate();
+        if (rule is null)
+            return;
+        UpdateLinkTemplatePreview(rule);
+        RefreshLinkTemplateListNames();
+        UpdateAutoPreview();
+    }
+
+    private void CommitLinkTemplateEditor()
+    {
+        var rule = SelectedLinkTemplate();
+        if (rule is null || LinkTemplateNameBox is null)
+            return;
+
+        rule.Name = string.IsNullOrWhiteSpace(LinkTemplateNameBox.Text)
+            ? "Шаблон"
+            : LinkTemplateNameBox.Text.Trim();
+        // Keep SampleUrl as typed so marker offsets stay valid.
+        if (LinkTemplateSampleBox is not null)
+            rule.SampleUrl = LinkTemplateSampleBox.Text ?? string.Empty;
+        rule.Format = string.IsNullOrWhiteSpace(LinkTemplateFormatBox.Text)
+            ? "{value}"
+            : LinkTemplateFormatBox.Text;
+        if (LinkTemplateCombineBox is not null)
+            rule.CombineLinks = LinkTemplateCombineBox.IsChecked == true;
+    }
+
+    private void LinkTemplateCombine_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_linkEditorSilent)
+            return;
+        CommitLinkTemplateEditor();
+        UpdateAutoPreview();
+    }
+
+    private void RefreshLinkTemplateListNames()
+    {
+        var index = LinkTemplatesList.SelectedIndex;
+        _linkEditorSilent = true;
+        try
+        {
+            LinkTemplatesList.ItemsSource = null;
+            LinkTemplatesList.ItemsSource = _linkTemplates;
+            LinkTemplatesList.SelectedIndex = index;
+        }
+        finally
+        {
+            _linkEditorSilent = false;
+        }
+    }
+
+    private void RenderLinkMarkers(LinkTemplateRule rule)
+    {
+        if (LinkMarkersHost is null)
+            return;
+        LinkMarkersHost.Children.Clear();
+        if (LinkMarkersEmptyText is not null)
+            LinkMarkersEmptyText.Visibility = rule.Markers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        for (var index = 0; index < rule.Markers.Count; index++)
+        {
+            var marker = rule.Markers[index];
+            var isAnchor = marker.Kind == LinkMarkerKind.Anchor;
+            var label = new TextBlock
+            {
+                Text = isAnchor
+                    ? $"Якорь: {marker.Text}"
+                    : $"Значение {{{(string.IsNullOrWhiteSpace(marker.CaptureName) ? "value" : marker.CaptureName)}}}: {marker.Text}",
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = isAnchor
+                    ? (Brush)FindResource("FgBrush")
+                    : (Brush)FindResource("QuickAddTextBrush")
+            };
+
+            var up = new Button
+            {
+                Content = "↑",
+                Style = (Style)FindResource("IconButton"),
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(4, 0, 0, 0),
+                Tag = marker,
+                IsEnabled = index > 0,
+                ToolTip = "Выше"
+            };
+            up.Click += MoveMarkerUp_Click;
+
+            var down = new Button
+            {
+                Content = "↓",
+                Style = (Style)FindResource("IconButton"),
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(2, 0, 0, 0),
+                Tag = marker,
+                IsEnabled = index < rule.Markers.Count - 1,
+                ToolTip = "Ниже"
+            };
+            down.Click += MoveMarkerDown_Click;
+
+            var remove = new Button
+            {
+                Content = "×",
+                Style = (Style)FindResource("IconButton"),
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(4, 0, 0, 0),
+                Tag = marker,
+                ToolTip = "Удалить"
+            };
+            remove.Click += RemoveLinkMarker_Click;
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            buttons.Children.Add(up);
+            buttons.Children.Add(down);
+            buttons.Children.Add(remove);
+
+            var chip = new Border
+            {
+                Background = isAnchor
+                    ? (Brush)FindResource("SelectionBrush")
+                    : (Brush)FindResource("QuickAddBrush"),
+                BorderBrush = isAnchor
+                    ? (Brush)FindResource("AccentBrush")
+                    : (Brush)FindResource("QuickAddHoverBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10, 6, 6, 6),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            var row = new DockPanel();
+            DockPanel.SetDock(buttons, Dock.Right);
+            row.Children.Add(buttons);
+            row.Children.Add(label);
+            chip.Child = row;
+            LinkMarkersHost.Children.Add(chip);
+        }
+
+        UpdateFormatHint(rule);
+    }
+
+    private void MoveMarkerUp_Click(object sender, RoutedEventArgs e) => MoveMarker(sender, -1);
+
+    private void MoveMarkerDown_Click(object sender, RoutedEventArgs e) => MoveMarker(sender, +1);
+
+    private void MoveMarker(object sender, int delta)
+    {
+        if (sender is not FrameworkElement { Tag: LinkTemplateMarker marker })
+            return;
+        var rule = SelectedLinkTemplate();
+        if (rule is null)
+            return;
+        var index = rule.Markers.IndexOf(marker);
+        var target = index + delta;
+        if (index < 0 || target < 0 || target >= rule.Markers.Count)
+            return;
+        rule.Markers.RemoveAt(index);
+        rule.Markers.Insert(target, marker);
+        RenderLinkMarkers(rule);
+        UpdateLinkTemplatePreview(rule);
+        UpdateAutoPreview();
+    }
+
+    private void RemoveLinkMarker_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: LinkTemplateMarker marker })
+            return;
+        var rule = SelectedLinkTemplate();
+        if (rule is null)
+            return;
+        rule.Markers.Remove(marker);
+        RenderLinkMarkers(rule);
+        UpdateLinkTemplatePreview(rule);
+        UpdateAutoPreview();
+    }
+
+    private void InsertFormatHeader_Click(object sender, RoutedEventArgs e) =>
+        InsertFormatMarker("{header}", "{/header}", "HD: ");
+
+    private void InsertFormatText_Click(object sender, RoutedEventArgs e) =>
+        InsertFormatMarker("{text}", "{/text}", string.Empty);
+
+    private void InsertFormatMarker(string open, string close, string sampleInside)
+    {
+        if (LinkTemplateFormatBox is null)
+            return;
+        var box = LinkTemplateFormatBox;
+        var start = Math.Clamp(box.SelectionStart, 0, box.Text.Length);
+        var length = Math.Clamp(box.SelectionLength, 0, box.Text.Length - start);
+        var selected = length > 0 ? box.Text.Substring(start, length) : sampleInside;
+        var insert = open + selected + close;
+        box.Text = box.Text.Remove(start, length).Insert(start, insert);
+        box.CaretIndex = start + insert.Length;
+        box.Focus();
+        CommitLinkTemplateEditor();
+        var rule = SelectedLinkTemplate();
+        if (rule is not null)
+        {
+            UpdateFormatHint(rule);
+            UpdateLinkTemplatePreview(rule);
+        }
+
+        UpdateAutoPreview();
+    }
+
+    private void UpdateFormatHint(LinkTemplateRule rule)
+    {
+        if (LinkTemplateFormatHint is null)
+            return;
+        var names = rule.Markers
+            .Where(m => m.Kind == LinkMarkerKind.Capture)
+            .Select(m => "{" + (string.IsNullOrWhiteSpace(m.CaptureName) ? "value" : m.CaptureName.Trim()) + "}")
+            .ToList();
+        var tokens = names.Count == 0
+            ? "{url}"
+            : string.Join(", ", names) + ", {url}";
+        LinkTemplateFormatHint.Text =
+            $"Доступно: {tokens}. Заголовок: {{header}}…{{/header}}. Обычный текст: {{text}}…{{/text}}.";
+    }
+
+    private void UpdateLinkTemplatePreview(LinkTemplateRule rule)
+    {
+        if (LinkTemplatePreviewText is null || LinkTemplateErrorText is null)
+            return;
+
+        var error = LinkTemplateEngine.ValidateRule(rule);
+        if (error is not null)
+        {
+            LinkTemplatePreviewText.Text = "—";
+            LinkTemplateErrorText.Text = error;
+            LinkTemplateErrorText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var preview = LinkTemplateEngine.TryPreview(rule) ?? "—";
+        LinkTemplatePreviewText.Text = preview;
+        LinkTemplateErrorText.Text = string.Empty;
+        LinkTemplateErrorText.Visibility = Visibility.Collapsed;
+    }
+
+    private bool TryValidateLinkTemplates(out List<LinkTemplateRule> templates)
+    {
+        templates = _linkTemplates.Select(r => r.Copy()).ToList();
+        for (var i = 0; i < templates.Count; i++)
+        {
+            var error = LinkTemplateEngine.ValidateRule(templates[i]);
+            if (error is null)
+                continue;
+            MessageBox.Show(this,
+                $"Шаблон «{templates[i].Name}»: {error}",
+                "Конструктор ссылок",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            LinkTemplatesList.SelectedIndex = i;
+            LoadSelectedLinkTemplateIntoEditor();
+            return false;
+        }
+
+        return true;
     }
 }

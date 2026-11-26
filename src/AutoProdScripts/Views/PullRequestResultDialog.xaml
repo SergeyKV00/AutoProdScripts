@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Pull Request"
         Height="320" Width="560"
-        MinHeight="280"
+        MinHeight="280" MinWidth="520"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BgBrush}"
         Foreground="{StaticResource FgBrush}"
@@ -28,14 +28,37 @@
 
         <StackPanel x:Name="TelegramPanel" Visibility="Collapsed" Margin="0,16,0,0">
           <TextBlock Text="Сообщение для Telegram" FontWeight="SemiBold" Foreground="{StaticResource FgBrush}"/>
-          <RichTextBox x:Name="TelegramMessageBox" Margin="0,8,0,0" Height="120"
+          <RichTextBox x:Name="TelegramMessageBox" Margin="0,8,0,0" Height="140"
                        IsDocumentEnabled="True"
                        Background="{StaticResource InputBrush}"
                        Foreground="{StaticResource FgBrush}"
                        CaretBrush="{StaticResource FgBrush}"
                        BorderBrush="#555555"
                        DataObject.Copying="TelegramMessageBox_Copying"/>
-          <TextBlock Text="Ctrl+K — задать свой текст ссылки" Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,0"/>
+          <TextBlock Text="Ctrl+K — изменить выделенную ссылку в тексте" Foreground="{StaticResource FgMutedBrush}" Margin="0,4,0,0"/>
+
+          <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,12,0,0">
+            <StackPanel>
+              <DockPanel Margin="0,0,0,8">
+                <Button DockPanel.Dock="Right" Content="Очистить список" Click="ClearManagedLinks_Click"
+                        Style="{StaticResource SecondaryButton}" Width="140" Margin="8,0,0,0"/>
+                <TextBlock Text="Список ссылок" FontWeight="SemiBold" VerticalAlignment="Center"
+                           Foreground="{StaticResource FgBrush}"/>
+              </DockPanel>
+              <StackPanel x:Name="ManagedLinksHost"/>
+              <TextBlock x:Name="ManagedLinksEmptyText" TextWrapping="Wrap" Margin="0,0,0,8"
+                         Foreground="{StaticResource FgMutedBrush}"
+                         Text="Список пуст. Вставьте или введите ссылки ниже."/>
+              <DockPanel>
+                <!--<Button DockPanel.Dock="Right" Content="Добавить" Click="AddManagedLinks_Click" Width="110" Margin="8,0,0,0"/>-->
+                <TextBox x:Name="LinkPasteBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="48"
+                         VerticalScrollBarVisibility="Auto"
+                         PreviewKeyDown="LinkPasteBox_PreviewKeyDown"
+                         DataObject.Pasting="LinkPasteBox_Pasting"/>
+              </DockPanel>
+            </StackPanel>
+          </Border>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>
