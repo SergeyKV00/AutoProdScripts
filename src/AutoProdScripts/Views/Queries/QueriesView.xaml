@@ -1,0 +1,125 @@
+<UserControl x:Class="AutoProdScripts.Views.Queries.QueriesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
+             xmlns:queries="clr-namespace:AutoProdScripts.Views.Queries">
+  <DockPanel Background="{DynamicResource BgBrush}">
+    <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
+      <WrapPanel>
+        <TextBlock Text="Подключение" VerticalAlignment="Center" Margin="4,0,6,0"
+                   Foreground="{DynamicResource FgMutedBrush}"/>
+        <ComboBox x:Name="ConnectionBox" Width="260" SelectionChanged="Connection_SelectionChanged"/>
+        <Border x:Name="EnvironmentBadge" CornerRadius="3" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Center"
+                Visibility="Collapsed">
+          <TextBlock x:Name="EnvironmentText" FontWeight="Bold" Foreground="{DynamicResource BgBrush}"/>
+        </Border>
+        <Button x:Name="RunButton" Content="▶ Выполнить (F5)" Click="Run_Click" Margin="16,0,0,0"
+                ToolTip="Если выделен фрагмент, выполнится только он"/>
+        <Button x:Name="CancelButton" Content="■ Отмена" Click="Cancel_Click" IsEnabled="False"
+                Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+        <TextBlock Text="Лимит строк" VerticalAlignment="Center" Margin="16,0,6,0"
+                   Foreground="{DynamicResource FgMutedBrush}"/>
+        <TextBox x:Name="MaxRowsBox" Width="70" Text="10000" VerticalAlignment="Center"/>
+        <Button x:Name="OpenButton" Content="Открыть файл…" Click="Open_Click" Style="{StaticResource ToolbarButton}" Margin="16,0,0,0"/>
+        <Button Content="Подключения…" Click="Connections_Click" Style="{StaticResource ToolbarButton}"/>
+      </WrapPanel>
+    </Border>
+
+    <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="280" MinWidth="200"/>
+      <ColumnDefinition Width="6"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+    <queries:LibraryPanel x:Name="Library"/>
+    <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                  ResizeDirection="Columns" Background="{DynamicResource BorderBrush}"/>
+    <Grid Grid.Column="2">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" MinHeight="120"/>
+        <RowDefinition Height="6"/>
+        <RowDefinition Height="*" MinHeight="120"/>
+      </Grid.RowDefinitions>
+
+      <Grid Grid.Row="0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" MinWidth="320"/>
+          <ColumnDefinition Width="6"/>
+          <ColumnDefinition Width="320" MinWidth="240"/>
+        </Grid.ColumnDefinitions>
+
+        <DockPanel Grid.Column="0">
+          <Border x:Name="ScriptHeader" DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}" Padding="8,6"
+                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Новый" Click="New_Click" Style="{StaticResource ToolbarButton}"/>
+                <Button Content="Сохранить" Click="Save_Click" ToolTip="Ctrl+S"/>
+                <Button Content="Сохранить как…" Click="SaveAs_Click" Style="{StaticResource ToolbarButton}"/>
+                <Button x:Name="PropertiesButton" Content="Свойства…" Click="Properties_Click"
+                        Style="{StaticResource ToolbarButton}"/>
+              </StackPanel>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource FgBrush}"/>
+                <TextBlock x:Name="DescriptionText" TextTrimming="CharacterEllipsis" Visibility="Collapsed"
+                           Foreground="{DynamicResource FgMutedBrush}"/>
+              </StackPanel>
+            </DockPanel>
+          </Border>
+          <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBrush}" Padding="8,4">
+            <TextBlock x:Name="CheckText" TextWrapping="Wrap" MaxHeight="60"/>
+          </Border>
+          <avalonEdit:TextEditor x:Name="Editor"
+                                 FontFamily="Consolas" FontSize="13"
+                                 ShowLineNumbers="True" WordWrap="False"
+                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                 Background="{DynamicResource GlassBgBrush}"
+                                 Foreground="{DynamicResource FgBrush}"
+                                 LineNumbersForeground="{DynamicResource LineNumbersBrush}"/>
+        </DockPanel>
+
+        <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                      ResizeDirection="Columns" Background="{DynamicResource BorderBrush}"/>
+
+        <DockPanel Grid.Column="2" Background="{DynamicResource PanelBrush}">
+          <TextBlock DockPanel.Dock="Top" Text="ПАРАМЕТРЫ" FontWeight="SemiBold" Margin="8,8,8,4"
+                     Foreground="{DynamicResource FgBrush}"/>
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="8,0,8,8">
+              <TextBlock x:Name="NoParametersText" TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}"
+                         Text="Переменные, не объявленные через DECLARE (например @id), появятся здесь."/>
+              <StackPanel x:Name="ParametersHost"/>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Grid>
+
+      <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                    ResizeDirection="Rows" Background="{DynamicResource BorderBrush}"/>
+
+      <DockPanel Grid.Row="2" Background="{DynamicResource PanelBrush}">
+        <DockPanel DockPanel.Dock="Top" Margin="8,4">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Button x:Name="CopyButton" Content="Копировать" Click="Copy_Click" IsEnabled="False"
+                    Style="{StaticResource SecondaryButton}"
+                    ToolTip="Выделенные ячейки или весь набор, с заголовками"/>
+            <Button x:Name="ExportButton" Content="Экспорт в CSV…" Click="Export_Click" IsEnabled="False"
+                    Style="{StaticResource SecondaryButton}"/>
+          </StackPanel>
+          <TextBlock x:Name="SummaryText" VerticalAlignment="Center" TextWrapping="Wrap"
+                     Foreground="{DynamicResource FgMutedBrush}"/>
+        </DockPanel>
+        <TabControl x:Name="ResultTabs" SelectionChanged="ResultTabs_SelectionChanged">
+          <TabItem x:Name="MessagesTab" Header="Сообщения">
+            <TextBox x:Name="MessagesBox" IsReadOnly="True" BorderThickness="0" TextWrapping="Wrap"
+                     FontFamily="Consolas" VerticalScrollBarVisibility="Auto"
+                     Background="{DynamicResource BgBrush}"/>
+          </TabItem>
+        </TabControl>
+      </DockPanel>
+    </Grid>
+    </Grid>
+  </DockPanel>
+</UserControl>

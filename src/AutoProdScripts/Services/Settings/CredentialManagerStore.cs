@@ -30,7 +30,7 @@ internal static class CredentialManagerStore
                 UserName = Environment.UserName,
                 AttributeCount = 0,
                 Attributes = IntPtr.Zero,
-                Comment = "AutoProdScripts Azure DevOps PAT"
+                Comment = "AutoProdScripts"
             };
 
             try

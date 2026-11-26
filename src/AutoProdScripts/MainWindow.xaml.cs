@@ -136,8 +136,40 @@ public partial class MainWindow : Window
         UpdateTabChrome(_activeDocument);
     }
 
-    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    private bool InQueries => Queries.Visibility == Visibility.Visible;
+
+    private void RepoSection_Click(object sender, RoutedEventArgs e) => ShowSection(queries: false);
+
+    private void QueriesSection_Click(object sender, RoutedEventArgs e) => ShowSection(queries: true);
+
+    private void ShowSection(bool queries)
     {
+        RepoArea.Visibility = queries ? Visibility.Collapsed : Visibility.Visible;
+        RepoToolbar.Visibility = RepoArea.Visibility;
+        Queries.Visibility = queries ? Visibility.Visible : Visibility.Collapsed;
+        if (queries)
+            Queries.Activate();
+    }
+
+    private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // В разделе «Запросы» горячие клавиши репозитория не должны менять файлы.
+        if (InQueries)
+        {
+            if (e.Key == Key.F5)
+            {
+                e.Handled = true;
+                await Queries.RunAsync();
+            }
+            else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                Queries.SaveScript();
+            }
+
+            return;
+        }
+
         if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
         {
             Save_Click(sender, e);
@@ -1764,6 +1796,12 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        if (!Queries.ConfirmDiscard())
+        {
+            e.Cancel = true;
+            return;
+        }
+
         var dirty = _documents.Where(d => d.IsDirty).ToList();
         if (dirty.Count == 0)
         {

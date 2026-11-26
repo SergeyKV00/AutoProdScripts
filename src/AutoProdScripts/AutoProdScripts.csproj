@@ -32,4 +32,8 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\AutoProdScripts.Core\AutoProdScripts.Core.csproj" />
+  </ItemGroup>
+
 </Project>
