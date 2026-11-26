@@ -47,6 +47,22 @@ public partial class LibraryPanel : UserControl
         }
     }
 
+    /// <summary>Свернуть все группы.</summary>
+    public void CollapseAll()
+    {
+        foreach (var node in Tree.Items.OfType<TreeViewItem>().SelectMany(Descendants))
+        {
+            if (node.Tag is string path)
+            {
+                node.IsExpanded = false;
+                _collapsed.Add(path);
+            }
+        }
+    }
+
+    private static IEnumerable<TreeViewItem> Descendants(TreeViewItem item) =>
+        new[] { item }.Concat(item.Items.OfType<TreeViewItem>().SelectMany(Descendants));
+
     public void Select(Guid? id)
     {
         _selected = id;

@@ -51,6 +51,16 @@ public sealed class RegionPicker : UserControl
     public IReadOnlyList<string> Selected =>
         _list.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
 
+    /// <summary>Отметить ровно эти регионы (у каждой вкладки свой выбор). Событие не вызывается.</summary>
+    public void SetSelected(IEnumerable<string> codes)
+    {
+        _selected.Clear();
+        _selected.UnionWith(codes);
+        foreach (var box in _list.Children.OfType<CheckBox>())
+            box.IsChecked = _selected.Contains((string)box.Tag);
+        UpdateCaption();
+    }
+
     public void Reload()
     {
         _list.Children.Clear();

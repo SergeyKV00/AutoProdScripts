@@ -1,11 +1,9 @@
-using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using AutoProdScripts.Core.Connections;
 using AutoProdScripts.Core.Execution;
-using AutoProdScripts.Core.Library;
 using AutoProdScripts.Core.Sql;
 using AutoProdScripts.Themes;
 using ICSharpCode.AvalonEdit.Highlighting;
@@ -15,10 +13,7 @@ namespace AutoProdScripts.Views.Queries;
 
 public partial class QueriesView : UserControl
 {
-    // Строки параметров переживают временное исчезновение переменной из текста.
-    private readonly Dictionary<string, ParameterRow> _rows = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _checkTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
-    private CancellationTokenSource? _running;
     private bool _initialized;
 
     public QueriesView()
@@ -29,13 +24,19 @@ public partial class QueriesView : UserControl
         Library.DeleteRequested += DeleteItem;
         Library.NewChainRequested += NewChain;
         Library.ImportRequested += ImportFile;
-        Library.BeforeExport = ConfirmDiscard;
+        Library.BeforeExport = ConfirmSaveActive;
         Chain.NewScriptRequested += () => NewScript();
-        Chain.BusyChanged += busy => Library.IsEnabled = !busy;
+        Chain.BusyChanged += _ => RefreshChrome();
+        Chain.TitleChanged += RefreshChrome;
         _checkTimer.Tick += (_, _) => CheckScript();
+        InitializeSession();
         Editor.TextChanged += (_, _) =>
         {
+            if (_switching || _active is null)
+                return;
             UpdateHeader();
+            RefreshChrome(_active);
+            ScheduleSessionSave();
             _checkTimer.Stop();
             _checkTimer.Start();
         };
@@ -52,57 +53,101 @@ public partial class QueriesView : UserControl
             App.Connections.Changed += ReloadConnections;
             App.Connections.Changed += () =>
             {
-                if (InChain)
+                if (_chainDocument is not null)
                     Chain.Reload();
+                RefreshChrome();
             };
+            App.Library.Changed += SyncWithLibrary;
             InitializeRegions();
             ReloadConnections();
             Library.Initialize();
-            UpdateHeader();
-            CheckScript();
-            if (App.Connections.LoadError is { } error)
-                Results.Summary = error;
+            InitializeExplorer();
+            RestoreSession();
+            if (App.Connections.LoadError is { } error && _active is { IsChain: false } doc)
+                doc.Results.Summary = error;
         }
 
-        if (!InChain)
+        if (_active is { IsChain: false })
             Editor.Focus();
     }
 
-    public void CancelRunning() => _running?.Cancel();
+    /// <summary>Отменяет все выполняющиеся запросы.</summary>
+    public void CancelRunning()
+    {
+        foreach (var doc in _documents)
+            doc.Running?.Cancel();
+    }
 
     private void ApplyHighlighting() =>
         Editor.SyntaxHighlighting = SqlHighlightingLoader.GetDefinition()
                                     ?? HighlightingManager.Instance.GetDefinition("TSQL");
 
+    /// <summary>Результаты активной вкладки скрипта.</summary>
+    private ResultsPanel Results => _active!.Results;
+
     private DbConnectionProfile? SelectedConnection => (ConnectionBox.SelectedItem as ComboBoxItem)?.Tag as DbConnectionProfile;
 
     private void ReloadConnections()
     {
-        var selected = SelectedConnection?.Id;
-        var regional = IsRegional;
-        ConnectionBox.Items.Clear();
-        var byRegion = new ComboBoxItem { Content = "🌍 " + RegionTargets.Title, Tag = RegionalTag };
-        ConnectionBox.Items.Add(byRegion);
-        foreach (var profile in App.Connections.GetAll())
+        _switching = true;
+        try
         {
-            // Выбранный пункт ComboBox показывает Content как есть, поэтому нужна строка, а не элемент.
-            var item = new ComboBoxItem { Content = profile.Name, Tag = profile };
-            ConnectionBox.Items.Add(item);
-            if (profile.Id == selected)
-                ConnectionBox.SelectedItem = item;
+            ConnectionBox.Items.Clear();
+            ConnectionBox.Items.Add(new ComboBoxItem { Content = "🌍 " + RegionTargets.Title, Tag = RegionalTag });
+            foreach (var profile in App.Connections.GetAll())
+                // Выбранный пункт ComboBox показывает Content как есть, поэтому нужна строка, а не элемент.
+                ConnectionBox.Items.Add(new ComboBoxItem { Content = profile.Name, Tag = profile });
+        }
+        finally
+        {
+            _switching = false;
         }
 
-        if (regional)
-            ConnectionBox.SelectedItem = byRegion;
+        if (_active is { IsChain: false } doc)
+            ShowConnection(doc);
+    }
+
+    /// <summary>Показывает в панели подключение вкладки, не меняя его.</summary>
+    private void ShowConnection(QueryDocument doc)
+    {
+        _switching = true;
+        try
+        {
+            ConnectionBox.SelectedItem = doc.Regional
+                ? ConnectionBox.Items.OfType<ComboBoxItem>().First(i => i.Tag is RegionalTag)
+                : ConnectionBox.Items.OfType<ComboBoxItem>()
+                    .FirstOrDefault(i => i.Tag is DbConnectionProfile p && p.Id == doc.ConnectionId);
+            RegionTemplateBox.Text = doc.RegionDatabase;
+            Regions.SetSelected(doc.RegionCodes);
+        }
+        finally
+        {
+            _switching = false;
+        }
+
+        UpdateDatabaseControls(doc);
         UpdateBadge();
     }
 
     private void Connection_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         e.Handled = true;
+        if (!_switching && _active is { IsChain: false } doc)
+        {
+            // Меняется подключение только этой вкладки.
+            doc.Regional = IsRegional;
+            doc.ConnectionId = SelectedConnection?.Id;
+            // База другого сервера здесь не имеет смысла.
+            doc.Database = string.Empty;
+            UpdateDatabaseControls(doc);
+            Explorer.SetActiveConnection(doc.Regional ? null : doc.ConnectionId, EffectiveDatabase(doc));
+            RefreshChrome(doc);
+            ScheduleSessionSave();
+        }
+
         UpdateBadge();
         // Предупреждение о базе зависит от выбранного подключения.
-        if (_initialized)
+        if (_initialized && !_switching)
             CheckScript();
     }
 
@@ -117,18 +162,27 @@ public partial class QueriesView : UserControl
 
         if (SelectedConnection is not { } profile)
         {
-            EnvironmentBadge.Visibility = Visibility.Collapsed;
+            GroupBadge.Visibility = Visibility.Collapsed;
+            DatabaseControls.Visibility = Visibility.Collapsed;
             TargetText.Text = string.Empty;
             return;
         }
 
-        EnvironmentBadge.Visibility = Visibility.Visible;
-        EnvironmentBadge.SetResourceReference(Border.BackgroundProperty, EnvironmentUi.BrushKey(profile.Environment));
-        EnvironmentText.Text = EnvironmentUi.Title(profile.Environment);
-        EnvironmentBadge.ToolTip = profile.Server;
-        TargetText.Text = profile.IsClusterLevel ? $"КЛАСТЕР {profile.Server}" : $"БАЗА {profile.Database}";
-        TargetText.ToolTip = $"{profile.Server} · {EnvironmentUi.Target(profile)}";
-        TargetText.SetResourceReference(TextBlock.ForegroundProperty, profile.IsClusterLevel ? "WarnBrush" : "FgInfoBrush");
+        ShowGroups([ConnectionUi.GroupOf(profile)]);
+        var database = _active is { IsChain: false } doc && doc.Database.Length > 0 ? doc.Database : null;
+        var cluster = profile.IsClusterLevel && database is null;
+        TargetText.Text = cluster ? $"КЛАСТЕР {profile.Server}" : $"БАЗА {database ?? profile.Database}";
+        TargetText.ToolTip = $"{ConnectionStringFactory.DataSource(profile)} · {ConnectionUi.Target(profile)}";
+        TargetText.SetResourceReference(TextBlock.ForegroundProperty, cluster ? "WarnBrush" : "FgInfoBrush");
+    }
+
+    /// <summary>Группа подключения рядом с ним — вместо прежней плашки среды.</summary>
+    private void ShowGroups(IEnumerable<string> groups)
+    {
+        var list = groups.Where(g => g.Length > 0).Distinct(StringComparer.CurrentCultureIgnoreCase).ToList();
+        GroupBadge.Visibility = list.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        GroupText.Text = string.Join(", ", list);
+        GroupBadge.ToolTip = "Группа подключения";
     }
 
     private void CheckScript()
@@ -140,28 +194,31 @@ public partial class QueriesView : UserControl
     private void CheckParameters()
     {
         _checkTimer.Stop();
+        if (_active is not { IsChain: false } doc)
+            return;
+
         if (string.IsNullOrWhiteSpace(Editor.Text))
         {
             SetCheck("Напишите или откройте SQL.", "FgMutedBrush");
-            ShowParameters([]);
+            ShowParameters(doc, []);
             return;
         }
 
         var analysis = ReadOnlyValidator.Analyze(Editor.Text);
         if (analysis.IsAllowed)
         {
-            if (SelectedConnection is { IsClusterLevel: true } && DatabaseChoice.IsMissing(Editor.Text))
-                SetCheck("⚠ " + EnvironmentUi.ClusterWarning, "WarnBrush");
+            if (SelectedConnection is { IsClusterLevel: true } && doc.Database.Length == 0 && DatabaseChoice.IsMissing(Editor.Text))
+                SetCheck("⚠ " + ConnectionUi.ClusterWarning, "WarnBrush");
             else
                 SetCheck("✔ Проверка «только чтение» пройдена.", "SuccessBrush");
-            ShowParameters(analysis.Parameters);
+            ShowParameters(doc, analysis.Parameters);
         }
         else
         {
             SetCheck("✖ " + string.Join(Environment.NewLine, analysis.Violations.Take(3)), "DangerBrush");
             // При ошибке разбора список параметров неизвестен — оставляем прежний.
             if (analysis.Batches.Count > 0)
-                ShowParameters(analysis.Parameters);
+                ShowParameters(doc, analysis.Parameters);
         }
     }
 
@@ -171,16 +228,18 @@ public partial class QueriesView : UserControl
         CheckText.SetResourceReference(TextBlock.ForegroundProperty, brushKey);
     }
 
-    private void ShowParameters(IReadOnlyList<string> names)
+    private void ShowParameters(QueryDocument doc, IReadOnlyList<string> names)
     {
-        var shown = ParametersHost.Children.OfType<FrameworkElement>().Select(c => (string)c.Tag).ToList();
-        if (!shown.SequenceEqual(names, StringComparer.OrdinalIgnoreCase))
+        var shown = ParametersHost.Children.OfType<FrameworkElement>().ToList();
+        var same = shown.Count == names.Count
+                   && shown.Zip(names).All(x => doc.Rows.TryGetValue(x.Second, out var row) && ReferenceEquals(row.Element, x.First));
+        if (!same)
         {
             ParametersHost.Children.Clear();
             foreach (var name in names)
             {
-                if (!_rows.TryGetValue(name, out var row))
-                    _rows[name] = row = CreateRow(name);
+                if (!doc.Rows.TryGetValue(name, out var row))
+                    doc.Rows[name] = row = CreateRow(doc, name);
                 ParametersHost.Children.Add(row.Element);
             }
         }
@@ -192,60 +251,66 @@ public partial class QueriesView : UserControl
 
     public async Task RunAsync()
     {
-        if (InChain)
+        if (_active is not { } doc)
+            return;
+        if (doc.IsChain)
         {
             await Chain.RunAsync();
             return;
         }
 
-        if (_running is not null)
+        if (doc.IsRunning)
             return;
 
         CheckScript();
         var selection = Editor.SelectionLength > 0;
         var sql = selection ? Editor.SelectedText : Editor.Text;
-        var regional = IsRegional;
-        var profile = SelectedConnection;
+        var results = doc.Results;
+        var regional = doc.Regional;
+        var profile = regional ? null : App.Connections.GetAll().FirstOrDefault(p => p.Id == doc.ConnectionId);
+        // База, выбранная во вкладке, заменяет базу подключения только для этого запуска.
+        if (profile is not null && doc.Database.Length > 0)
+            profile.Database = doc.Database;
         if (profile is null && !regional)
         {
-            Results.ShowFailure(App.Connections.GetAll().Count == 0
+            results.ShowFailure(App.Connections.GetAll().Count == 0
                 ? "Сначала добавьте подключение (кнопка «Подключения…»)."
-                : "Выберите подключение.");
+                : "Выберите подключение для этой вкладки.");
             return;
         }
 
         var analysis = ReadOnlyValidator.Analyze(sql);
         if (!analysis.IsAllowed)
         {
-            Results.ShowFailure("Скрипт не выполнен: он не прошёл проверку «только чтение»."
+            results.ShowFailure("Скрипт не выполнен: он не прошёл проверку «только чтение»."
                         + Environment.NewLine + string.Join(Environment.NewLine, analysis.Violations));
             return;
         }
 
         if (!int.TryParse(MaxRowsBox.Text.Trim(), out var maxRows) || maxRows <= 0)
         {
-            Results.ShowFailure("Лимит строк должен быть положительным числом.");
+            results.ShowFailure("Лимит строк должен быть положительным числом.");
             return;
         }
 
         if (profile is null)
         {
-            await RunRegionsAsync(sql, analysis, maxRows, selection);
+            await RunRegionsAsync(doc, sql, analysis, maxRows, selection);
             return;
         }
 
         var password = profile.AuthMode == DbAuthMode.SqlLogin ? App.Connections.LoadPassword(profile.Id) : null;
         if (profile.AuthMode == DbAuthMode.SqlLogin && password is null)
         {
-            Results.ShowFailure("Для этого подключения не сохранён пароль.");
+            results.ShowFailure("Для этого подключения не сохранён пароль.");
             return;
         }
 
-        var source = _running = new CancellationTokenSource();
-        var scriptId = _current?.Id;
-        SetBusy(true);
-        Results.Clear();
-        Results.Summary = selection ? "Выполняется выделенный фрагмент…" : "Выполняется…";
+        var source = new CancellationTokenSource();
+        var scriptId = doc.ScriptId;
+        SetBusy(doc, source);
+        results.Clear();
+        results.Summary = selection ? "Выполняется выделенный фрагмент…" : "Выполняется…";
         try
         {
             var request = new QueryRequest
@@ -253,8 +318,8 @@ public partial class QueriesView : UserControl
                 ConnectionString = ConnectionStringFactory.Build(profile, password),
                 Sql = sql,
                 Parameters = analysis.Parameters
-                    .Where(_rows.ContainsKey)
-                    .Select(name => _rows[name].Value())
+                    .Where(doc.Rows.ContainsKey)
+                    .Select(name => doc.Rows[name].Value())
                     .ToList(),
                 MaxRows = maxRows,
                 CommandTimeoutSeconds = profile.CommandTimeoutSeconds
@@ -263,7 +328,7 @@ public partial class QueriesView : UserControl
             // Ни текст запроса, ни значения параметров в лог не пишем.
             App.Log.Info($"Запрос: подключение «{profile.Name}».");
             var result = await Task.Run(() => QueryRunner.RunAsync(request, source.Token));
-            ShowResult(result, selection);
+            ShowResult(results, result, selection);
             if (scriptId is { } id)
                 MarkRun(id);
             App.Log.Info(result.Success
@@ -272,38 +337,43 @@ public partial class QueriesView : UserControl
         }
         catch (OperationCanceledException)
         {
-            Results.ShowFailure("Выполнение отменено.");
+            results.ShowFailure("Выполнение отменено.");
             App.Log.Info("Запрос отменён.");
         }
         catch (Exception ex)
         {
             // Любой сбой запуска показываем в «Сообщениях», а не роняем приложение.
-            Results.ShowFailure(ex.Message);
+            results.ShowFailure(ex.Message);
             App.Log.Warn("Запрос не выполнен.");
         }
         finally
         {
-            _running = null;
+            SetBusy(doc, null);
             source.Dispose();
-            SetBusy(false);
         }
     }
 
-    private void SetBusy(bool busy)
+    /// <summary>У каждой вкладки свой запуск: другие вкладки в это время можно править и запускать.</summary>
+    private void SetBusy(QueryDocument doc, CancellationTokenSource? running)
+    {
+        doc.Running = running;
+        if (doc == _active)
+            ShowBusy(doc.IsRunning);
+        RefreshChrome(doc);
+    }
+
+    private void ShowBusy(bool busy)
     {
         RunButton.IsEnabled = !busy;
         CancelButton.IsEnabled = busy;
+        // Пока идёт запрос, подключение вкладки не меняем: иначе непонятно, откуда результаты.
         ConnectionBox.IsEnabled = !busy;
-        // Пока идёт запрос, скрипт не меняем: иначе результаты окажутся от другого.
-        Library.IsEnabled = !busy;
-        ScriptHeader.IsEnabled = !busy;
-        OpenButton.IsEnabled = !busy;
         RegionControls.IsEnabled = !busy;
     }
 
-    private void Cancel_Click(object sender, RoutedEventArgs e) => _running?.Cancel();
+    private void Cancel_Click(object sender, RoutedEventArgs e) => _active?.Running?.Cancel();
 
-    private void ShowResult(QueryResult result, bool selection)
+    private static void ShowResult(ResultsPanel results, QueryResult result, bool selection)
     {
         var messages = new List<string>();
         if (result.Error is not null)
@@ -315,27 +385,34 @@ public partial class QueriesView : UserControl
                       + (selection ? " (выделенный фрагмент)" : "")
                       + $" · строк: {rows} · {ResultsPanel.Seconds(result.Elapsed)}"
                       + (result.ResultSets.Any(s => s.Truncated) ? " · показаны не все строки" : "");
-        Results.Show(
+        results.Show(
             result.ResultSets.Select((set, i) => ($"Результат {i + 1}", set)).ToList(),
             messages, summary, openMessages: !result.Success);
     }
 
-    private void Open_Click(object sender, RoutedEventArgs e)
+    private void Open_Click(object sender, RoutedEventArgs e) => OpenFile();
+
+    /// <summary>Файл .sql открывается в новой вкладке как черновик.</summary>
+    public void OpenFile()
     {
         var dialog = new OpenFileDialog { Filter = "SQL (*.sql)|*.sql|Все файлы (*.*)|*.*" };
-        if (dialog.ShowDialog(Window.GetWindow(this)) != true || !ConfirmDiscard())
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true)
             return;
 
         try
         {
-            ShowDraft(File.ReadAllText(dialog.FileName), Path.GetFileNameWithoutExtension(dialog.FileName));
+            var doc = CreateDraft(File.ReadAllText(dialog.FileName), Path.GetFileNameWithoutExtension(dialog.FileName));
+            ActivateDocument(doc);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Results.Summary = "Не удалось открыть файл: " + ex.Message;
+            MessageBox.Show(Window.GetWindow(this), "Не удалось открыть файл: " + ex.Message, "Запросы",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
-    private void Connections_Click(object sender, RoutedEventArgs e) =>
+    private void Connections_Click(object sender, RoutedEventArgs e) => ShowConnections();
+
+    public void ShowConnections() =>
         new ConnectionsWindow { Owner = Window.GetWindow(this) }.ShowDialog();
 }

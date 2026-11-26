@@ -42,10 +42,10 @@ public partial class MainWindow : Window
         App.Log.Entries.CollectionChanged += (_, _) => RenderLog();
         RenderLog();
         ApplySqlHighlighting();
-        ThemeCombo.ItemsSource = ThemeOptions;
         UpdateThemeMenu();
         ThemeService.ThemeChanged += OnThemeChanged;
         Closed += (_, _) => ThemeService.ThemeChanged -= OnThemeChanged;
+        Closed += (_, _) => Queries.CancelRunning();
         SqlEditor.TextChanged += SqlEditor_TextChanged;
         Loaded += async (_, _) => await OnLoadedAsync();
         PreviewKeyDown += MainWindow_PreviewKeyDown;
@@ -61,9 +61,6 @@ public partial class MainWindow : Window
         ThemeDarkItem.IsChecked = ThemeService.Current == AppTheme.Dark;
         ThemeLightItem.IsChecked = ThemeService.Current == AppTheme.Light;
         ThemeGtaItem.IsChecked = ThemeService.Current == AppTheme.Gta6;
-        _suppressThemeCombo = true;
-        ThemeCombo.SelectedItem = ThemeOptions.First(o => o.Theme == ThemeService.Current);
-        _suppressThemeCombo = false;
     }
 
     private void SetTheme(AppTheme theme)
@@ -73,29 +70,6 @@ public partial class MainWindow : Window
         settings.Theme = theme.ToString();
         App.Settings.Save(settings);
         UpdateThemeMenu();
-    }
-
-    private sealed record ThemeOption(string Name, AppTheme Theme)
-    {
-        public override string ToString() => Name;
-    }
-
-    private static readonly ThemeOption[] ThemeOptions =
-    {
-        new("Тёмная", AppTheme.Dark),
-        new("Светлая", AppTheme.Light),
-        new("GTA VI · Vice City", AppTheme.Gta6)
-    };
-
-    private bool _suppressThemeCombo;
-
-    private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressThemeCombo || ThemeCombo.SelectedItem is not ThemeOption option)
-            return;
-
-        if (option.Theme != ThemeService.Current)
-            SetTheme(option.Theme);
     }
 
     private void ThemeDark_Click(object sender, RoutedEventArgs e) => SetTheme(AppTheme.Dark);
@@ -147,9 +121,26 @@ public partial class MainWindow : Window
         RepoArea.Visibility = queries ? Visibility.Collapsed : Visibility.Visible;
         RepoToolbar.Visibility = RepoArea.Visibility;
         Queries.Visibility = queries ? Visibility.Visible : Visibility.Collapsed;
+        // Меню показывает только то, что относится к разделу.
+        var repo = queries ? Visibility.Collapsed : Visibility.Visible;
+        var query = queries ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var item in new[] { RepoSaveItem, RepoQuickAddItem, RepoMappingItem, GitMenu, PrMenu })
+            item.Visibility = repo;
+        foreach (var item in new[] { QueriesNewItem, QueriesOpenItem, QueriesSaveItem, QueriesCloseItem, QueriesConnectionsItem })
+            item.Visibility = query;
         if (queries)
             Queries.Activate();
     }
+
+    private void QueriesNew_Click(object sender, RoutedEventArgs e) => Queries.NewTab();
+
+    private void QueriesOpen_Click(object sender, RoutedEventArgs e) => Queries.OpenFile();
+
+    private void QueriesSave_Click(object sender, RoutedEventArgs e) => Queries.SaveScript();
+
+    private void QueriesClose_Click(object sender, RoutedEventArgs e) => Queries.CloseActiveTab();
+
+    private void QueriesConnections_Click(object sender, RoutedEventArgs e) => Queries.ShowConnections();
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -165,6 +156,26 @@ public partial class MainWindow : Window
             {
                 e.Handled = true;
                 Queries.SaveScript();
+            }
+            else if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                Queries.NewTab();
+            }
+            else if (e.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                Queries.OpenFile();
+            }
+            else if ((e.Key == Key.W || e.Key == Key.F4) && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                Queries.CloseActiveTab();
+            }
+            else if (e.Key == Key.Tab && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                e.Handled = true;
+                Queries.CycleTab(back: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
             }
 
             return;
@@ -1796,7 +1807,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (!Queries.ConfirmDiscard())
+        if (!Queries.ConfirmClose())
         {
             e.Cancel = true;
             return;

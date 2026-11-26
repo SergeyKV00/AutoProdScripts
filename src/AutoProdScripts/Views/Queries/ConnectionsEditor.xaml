@@ -3,12 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Grid>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="260"/>
-      <ColumnDefinition Width="12"/>
+      <ColumnDefinition x:Name="ListColumn" Width="260"/>
+      <ColumnDefinition x:Name="GapColumn" Width="12"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
 
-    <DockPanel Grid.Column="0">
+    <DockPanel x:Name="ListPanel" Grid.Column="0">
       <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
         <Button Content="Добавить" Click="Add_Click" Margin="0,0,0,6"/>
         <Button x:Name="DuplicateButton" Content="Дублировать" Click="Duplicate_Click"
@@ -38,14 +38,31 @@
           </StackPanel>
         </Border>
 
+        <Label Content="Тип СУБД"/>
+        <ComboBox x:Name="ProviderBox" IsEnabled="False"/>
+
         <Label Content="Имя"/>
         <TextBox x:Name="NameBox"/>
 
-        <Label Content="Среда"/>
-        <ComboBox x:Name="EnvironmentBox"/>
+        <Label Content="Группа"/>
+        <ComboBox x:Name="GroupBox" IsEditable="True"
+                  ToolTip="Папка в дереве подключений, например PROD или Регионы/Астана. Пусто — без группы."/>
 
-        <Label Content="Сервер или listener кластера"/>
-        <TextBox x:Name="ServerBox"/>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="12"/>
+            <ColumnDefinition Width="90"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel Grid.Column="0">
+            <Label Content="Сервер или listener кластера"/>
+            <TextBox x:Name="ServerBox"/>
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <Label Content="Порт"/>
+            <TextBox x:Name="PortBox" ToolTip="Пусто — порт по умолчанию (1433)"/>
+          </StackPanel>
+        </Grid>
 
         <Label Content="Куда подключаться"/>
         <ComboBox x:Name="LevelBox" SelectionChanged="Level_SelectionChanged"/>

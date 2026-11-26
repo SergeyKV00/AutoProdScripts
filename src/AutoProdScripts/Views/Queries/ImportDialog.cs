@@ -80,7 +80,7 @@ internal sealed class ImportDialog : Window
             {
                 var item = new ComboBoxItem
                 {
-                    Content = $"{EnvironmentUi.Option(profile)}  ·  {EnvironmentUi.Title(profile.Environment)}",
+                    Content = ConnectionUi.Option(profile),
                     Tag = new MappedConnection(profile.Id, profile.Name)
                 };
                 box.Items.Add(item);

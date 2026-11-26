@@ -11,7 +11,7 @@ public static class ConnectionStringFactory
 
         var builder = new SqlConnectionStringBuilder(profile.ExtraParameters ?? string.Empty)
         {
-            DataSource = profile.Server.Trim(),
+            DataSource = DataSource(profile),
             InitialCatalog = profile.Database.Trim(),
             Encrypt = profile.Encrypt ? SqlConnectionEncryptOption.Mandatory : SqlConnectionEncryptOption.Optional,
             TrustServerCertificate = profile.TrustServerCertificate,
@@ -39,5 +39,12 @@ public static class ConnectionStringFactory
         }
 
         return builder.ConnectionString;
+    }
+
+    /// <summary>Адрес с портом в формате SQL Server: «host,port». Порт в самом адресе не дублируем.</summary>
+    public static string DataSource(DbConnectionProfile profile)
+    {
+        var server = profile.Server.Trim();
+        return profile.Port is { } port && !server.Contains(',') ? $"{server},{port}" : server;
     }
 }

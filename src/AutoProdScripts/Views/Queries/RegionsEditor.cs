@@ -197,7 +197,7 @@ public sealed class RegionsEditor : UserControl
         var current = ScriptConnection.Resolve(region.ConnectionId, region.ConnectionName, connections);
         foreach (var profile in connections.OrderByDescending(c => c.IsClusterLevel))
         {
-            var item = new ComboBoxItem { Content = EnvironmentUi.Option(profile), Tag = profile };
+            var item = new ComboBoxItem { Content = ConnectionUi.Option(profile), Tag = profile };
             cluster.Items.Add(item);
             if (profile.Id == current?.Id)
                 cluster.SelectedItem = item;

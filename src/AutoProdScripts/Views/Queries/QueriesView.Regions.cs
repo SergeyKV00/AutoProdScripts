@@ -17,18 +17,37 @@ public partial class QueriesView
     private void InitializeRegions()
     {
         Regions.Reload();
-        Regions.SelectionChanged += UpdateBadge;
+        Regions.SelectionChanged += () =>
+        {
+            if (_active is { IsChain: false } doc)
+            {
+                doc.RegionCodes = Regions.Selected.ToList();
+                ScheduleSessionSave();
+            }
+
+            UpdateBadge();
+        };
         App.Regions.Changed += () =>
         {
             Regions.Reload();
+            if (_active is { IsChain: false } doc)
+                Regions.SetSelected(doc.RegionCodes);
             UpdateBadge();
         };
     }
 
     private void RegionTemplate_Changed(object sender, TextChangedEventArgs e)
     {
-        if (_initialized)
-            UpdateBadge();
+        if (!_initialized || _switching)
+            return;
+        if (_active is { IsChain: false } doc)
+        {
+            doc.RegionDatabase = RegionTemplateBox.Text.Trim();
+            RefreshChrome(doc);
+            ScheduleSessionSave();
+        }
+
+        UpdateBadge();
     }
 
     private void UpdateRegionBadge()
@@ -38,18 +57,14 @@ public partial class QueriesView
         var profiles = codes.Select(code => RegionTargets.Build(code, template).Profile).OfType<DbConnectionProfile>().ToList();
 
         // Показываем самую опасную среду из выбранных.
-        if (profiles.Count == 0)
-        {
-            EnvironmentBadge.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            var environment = profiles.Min(p => p.Environment);
-            EnvironmentBadge.Visibility = Visibility.Visible;
-            EnvironmentBadge.SetResourceReference(Border.BackgroundProperty, EnvironmentUi.BrushKey(environment));
-            EnvironmentText.Text = EnvironmentUi.Title(environment);
-            EnvironmentBadge.ToolTip = string.Join(Environment.NewLine, profiles.Select(p => $"{p.Database} · {p.Server}"));
-        }
+        // Группы кластеров выбранных регионов.
+        var connections = App.Connections.GetAll();
+        ShowGroups(codes
+            .Select(code => App.Regions.GetAll().FirstOrDefault(r => string.Equals(r.Code, code, StringComparison.OrdinalIgnoreCase)))
+            .Select(r => r is null ? null : ScriptConnection.Resolve(r.ConnectionId, r.ConnectionName, connections))
+            .OfType<DbConnectionProfile>()
+            .Select(ConnectionUi.GroupOf));
+        GroupBadge.ToolTip = string.Join(Environment.NewLine, profiles.Select(p => $"{p.Database} · {p.Server}"));
 
         var problem = RegionDatabase.Validate(template);
         TargetText.Text = problem ?? string.Join(", ", codes.Select(c => RegionDatabase.Resolve(template, c)));
@@ -57,69 +72,70 @@ public partial class QueriesView
         TargetText.SetResourceReference(TextBlock.ForegroundProperty, problem is null ? "FgInfoBrush" : "WarnBrush");
     }
 
-    private async Task RunRegionsAsync(string sql, SqlAnalysis analysis, int maxRows, bool selection)
+    private async Task RunRegionsAsync(QueryDocument doc, string sql, SqlAnalysis analysis, int maxRows, bool selection)
     {
-        var template = RegionTemplateBox.Text.Trim();
-        var codes = Regions.Selected;
+        var template = doc.RegionDatabase.Trim();
+        // Запускается всегда активная вкладка; в списке — только регионы, которые есть в справочнике.
+        var codes = Regions.Selected.ToList();
+        var results = doc.Results;
         if (RegionDatabase.Validate(template) is { } problem)
         {
-            Results.ShowFailure(problem);
+            results.ShowFailure(problem);
             return;
         }
 
         if (codes.Count == 0)
         {
-            Results.ShowFailure(App.Regions.GetAll().Count == 0
+            results.ShowFailure(App.Regions.GetAll().Count == 0
                 ? "Сначала настройте регионы: «Подключения…» → вкладка «Регионы»."
                 : "Отметьте регионы, по которым выполнить запрос.");
             return;
         }
 
-        var source = _running = new CancellationTokenSource();
-        var scriptId = _current?.Id;
-        SetBusy(true);
-        Results.Clear();
-        Results.Summary = $"Выполняется по регионам: 0 из {codes.Count}…";
+        var source = new CancellationTokenSource();
+        var scriptId = doc.ScriptId;
+        SetBusy(doc, source);
+        results.Clear();
+        results.Summary = $"Выполняется по регионам: 0 из {codes.Count}…";
         var done = 0;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var targets = codes.Select(code => RegionTargets.Build(code, template).Target).ToList();
-            var parameters = analysis.Parameters.Where(_rows.ContainsKey).Select(name => _rows[name].Value()).ToList();
+            var parameters = analysis.Parameters.Where(doc.Rows.ContainsKey).Select(name => doc.Rows[name].Value()).ToList();
             var progress = new Progress<RegionOutcome>(_ =>
             {
                 // Поздние сообщения не должны затереть итог.
-                if (_running is not null)
-                    Results.Summary = $"Выполняется по регионам: {++done} из {codes.Count}…";
+                if (doc.IsRunning)
+                    results.Summary = $"Выполняется по регионам: {++done} из {codes.Count}…";
             });
 
             App.Log.Info($"Запрос по регионам: {codes.Count}.");
             var outcomes = await RegionRunner.RunAsync(targets, sql, parameters, maxRows, progress, source.Token);
-            _running = null;
-            ShowRegionResults(outcomes, selection, watch.Elapsed);
+            doc.Running = null;
+            ShowRegionResults(results, outcomes, selection, watch.Elapsed);
             App.Log.Info($"Запрос по регионам завершён за {ResultsPanel.Seconds(watch.Elapsed)}, с ошибкой: {outcomes.Count(o => !o.Success)}.");
             if (scriptId is { } id)
                 MarkRun(id);
         }
         catch (OperationCanceledException)
         {
-            Results.ShowFailure("Выполнение отменено.");
+            results.ShowFailure("Выполнение отменено.");
             App.Log.Info("Запрос отменён.");
         }
         catch (Exception ex)
         {
-            Results.ShowFailure(ex.Message);
+            results.ShowFailure(ex.Message);
             App.Log.Warn("Запрос по регионам не выполнен.");
         }
         finally
         {
-            _running = null;
+            SetBusy(doc, null);
             source.Dispose();
-            SetBusy(false);
         }
     }
 
-    private void ShowRegionResults(IReadOnlyList<RegionOutcome> outcomes, bool selection, TimeSpan elapsed)
+    private static void ShowRegionResults(ResultsPanel results, IReadOnlyList<RegionOutcome> outcomes, bool selection, TimeSpan elapsed)
     {
         var merged = RegionRunner.Merge(outcomes);
         var failed = outcomes.Where(o => !o.Success).ToList();
@@ -152,7 +168,7 @@ public partial class QueriesView
         if (truncated.Count > 0)
             summary = $"⚠ Обрезано по лимиту строк: {string.Join(", ", truncated)}. " + summary;
 
-        Results.Show(sets, messages, summary, openMessages: sets.Count == 0);
-        Results.Warn(failed.Count > 0 || truncated.Count > 0);
+        results.Show(sets, messages, summary, openMessages: sets.Count == 0);
+        results.Warn(failed.Count > 0 || truncated.Count > 0);
     }
 }

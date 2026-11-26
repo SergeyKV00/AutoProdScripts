@@ -201,6 +201,13 @@ public partial class ResultsPanel : UserControl
             current.Grid.UnselectAllCells();
     }
 
+    /// <summary>Сохранить текущий результат в CSV (с выбором файла). Без результата — ничего.</summary>
+    public void ExportCsv()
+    {
+        if (ExportButton.IsEnabled)
+            Export_Click(this, new RoutedEventArgs());
+    }
+
     private void Export_Click(object sender, RoutedEventArgs e)
     {
         if (CurrentResult() is not { } current)

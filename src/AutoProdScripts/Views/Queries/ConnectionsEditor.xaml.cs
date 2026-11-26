@@ -18,12 +18,8 @@ public partial class ConnectionsEditor : UserControl
     public ConnectionsEditor()
     {
         InitializeComponent();
-        EnvironmentBox.ItemsSource = new[]
-        {
-            EnvironmentUi.Title(DbEnvironment.Prod),
-            EnvironmentUi.Title(DbEnvironment.Test),
-            EnvironmentUi.Title(DbEnvironment.Dev)
-        };
+        ProviderBox.ItemsSource = new[] { "Microsoft SQL Server" };
+        ProviderBox.SelectedIndex = 0;
         AuthBox.ItemsSource = new[] { "Windows-аутентификация", "SQL-логин" };
         LevelBox.ItemsSource = new[] { "К конкретной базе", "К кластеру (без базы)" };
         DataObject.AddPastingHandler(PasteBox, OnPaste);
@@ -36,6 +32,32 @@ public partial class ConnectionsEditor : UserControl
     }
 
     private Window? Owner => Window.GetWindow(this);
+
+    private bool _single;
+
+    /// <summary>Для «на основе текущего»: чей пароль взять, если новый не введён.</summary>
+    private Guid? _copyPasswordFrom;
+
+    public void CopyPasswordFrom(Guid id) => _copyPasswordFrom = id;
+
+    /// <summary>Подключение сохранено (в режиме одного подключения — можно закрывать окно).</summary>
+    public event Action<DbConnectionProfile>? Saved;
+
+    /// <summary>
+    /// Режим мастера: без списка слева, редактируется одно подключение.
+    /// </summary>
+    /// <param name="isNew">true — сохранить как новое (в том числе «на основе текущего»).</param>
+    public void ShowSingle(DbConnectionProfile profile, bool isNew, string? password = null)
+    {
+        _single = true;
+        ListPanel.Visibility = Visibility.Collapsed;
+        ListColumn.Width = new GridLength(0);
+        GapColumn.Width = new GridLength(0);
+        Show(profile, isNew);
+        if (password is not null)
+            PasswordInput.Password = password;
+        _baseline = Snapshot();
+    }
 
     private bool HasUnsavedChanges => Snapshot() != _baseline;
 
@@ -60,7 +82,7 @@ public partial class ConnectionsEditor : UserControl
         List.Items.Clear();
         foreach (var profile in App.Connections.GetAll())
         {
-            var item = new ListBoxItem { Content = EnvironmentUi.Label(profile), Tag = profile };
+            var item = new ListBoxItem { Content = ConnectionUi.Label(profile), Tag = profile };
             List.Items.Add(item);
             if (profile.Id == select)
                 List.SelectedItem = item;
@@ -97,8 +119,10 @@ public partial class ConnectionsEditor : UserControl
     private void Fill(DbConnectionProfile profile)
     {
         NameBox.Text = profile.Name;
-        EnvironmentBox.SelectedIndex = (int)profile.Environment;
+        GroupBox.ItemsSource = App.Connections.Groups();
+        GroupBox.Text = ConnectionStore.NormalizeGroup(profile.Group);
         ServerBox.Text = profile.Server;
+        PortBox.Text = profile.Port?.ToString() ?? string.Empty;
         DatabaseBox.Text = profile.Database;
         // У нового пустого подключения предлагаем базу; «кластер» — только когда сервер уже есть, а базы нет.
         LevelBox.SelectedIndex = profile.IsClusterLevel && profile.Server.Length > 0 ? ClusterLevel : DatabaseLevel;
@@ -134,8 +158,10 @@ public partial class ConnectionsEditor : UserControl
     {
         var profile = _current.Clone();
         profile.Name = NameBox.Text.Trim();
-        profile.Environment = (DbEnvironment)Math.Max(0, EnvironmentBox.SelectedIndex);
+        profile.Provider = DbProvider.SqlServer;
+        profile.Group = ConnectionStore.NormalizeGroup(GroupBox.Text);
         profile.Server = ServerBox.Text.Trim();
+        profile.Port = int.TryParse(PortBox.Text.Trim(), out var port) ? port : null;
         profile.Database = LevelBox.SelectedIndex == ClusterLevel ? string.Empty : DatabaseBox.Text.Trim();
         profile.AuthMode = (DbAuthMode)Math.Max(0, AuthBox.SelectedIndex);
         profile.UserName = UserBox.Text.Trim();
@@ -235,10 +261,25 @@ public partial class ConnectionsEditor : UserControl
         if (LevelBox.SelectedIndex == DatabaseLevel && profile.Database.Length == 0)
             throw new InvalidOperationException("Укажите базу или выберите «К кластеру (без базы)».");
         var password = PasswordInput.Password.Length > 0 ? PasswordInput.Password : null;
+        if (PortBox.Text.Trim().Length > 0 && profile.Port is null)
+            throw new InvalidOperationException("Порт — число от 1 до 65535.");
+        // Копия «на основе текущего» без нового пароля берёт пароль исходного.
+        if (password is null && _isNew && _single && _copyPasswordFrom is { } source)
+            password = App.Connections.LoadPassword(source);
         App.Connections.Save(profile, password);
+        if (_single)
+        {
+            _current = profile;
+            _isNew = false;
+            _baseline = Snapshot();
+            Saved?.Invoke(profile);
+            return;
+        }
+
         ReloadList(profile.Id);
         ShowSelectedOrNew();
         StatusLine.Text = "Подключение сохранено.";
+        Saved?.Invoke(profile);
     });
 
     private void Try(Action action)
@@ -318,7 +359,7 @@ public partial class ConnectionsEditor : UserControl
 
             ReloadList(last);
             ShowSelectedOrNew();
-            StatusLine.Text = $"Добавлено подключений: {dialog.Selected.Count}. Проверьте у каждого среду.";
+            StatusLine.Text = $"Добавлено подключений: {dialog.Selected.Count}. Разложите их по группам.";
         });
     }
 
@@ -343,7 +384,7 @@ public partial class ConnectionsEditor : UserControl
         StatusLine.Text = (profile.IsClusterLevel
                               ? "В строке нет базы — это подключение к КЛАСТЕРУ."
                               : $"Это подключение к базе {profile.Database}.")
-                          + " Проверьте поля и среду, затем сохраните.";
+                          + " Проверьте поля и группу, затем сохраните.";
     }
 
     private async void Test_Click(object sender, RoutedEventArgs e)
@@ -357,7 +398,8 @@ public partial class ConnectionsEditor : UserControl
             var profile = Collect();
             var password = PasswordInput.Password.Length > 0
                 ? PasswordInput.Password
-                : _isNew ? null : App.Connections.LoadPassword(profile.Id);
+                : !_isNew ? App.Connections.LoadPassword(profile.Id)
+                : _copyPasswordFrom is { } original ? App.Connections.LoadPassword(original) : null;
             var connectionString = ConnectionStringFactory.Build(profile, password);
             var result = await Task.Run(() => ConnectionTester.TestAsync(connectionString, source.Token), source.Token);
             if (source.IsCancellationRequested)

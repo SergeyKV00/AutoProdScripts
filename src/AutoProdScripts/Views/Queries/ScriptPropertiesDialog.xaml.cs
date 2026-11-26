@@ -46,7 +46,7 @@ public partial class ScriptPropertiesDialog : Window
 
         foreach (var profile in connections)
         {
-            var item = new ComboBoxItem { Content = EnvironmentUi.Option(profile), Tag = (profile.Id, profile.Name) };
+            var item = new ComboBoxItem { Content = ConnectionUi.Option(profile), Tag = (profile.Id, profile.Name) };
             ConnectionBox.Items.Add(item);
             if (profile.Id == current?.Id)
                 ConnectionBox.SelectedItem = item;

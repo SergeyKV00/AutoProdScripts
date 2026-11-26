@@ -6,11 +6,10 @@ public enum DbAuthMode
     SqlLogin = 1
 }
 
-public enum DbEnvironment
+/// <summary>Тип СУБД. Пока поддерживается только MS SQL Server; остальное — задел под провайдеры.</summary>
+public enum DbProvider
 {
-    Prod = 0,
-    Test = 1,
-    Dev = 2
+    SqlServer = 0
 }
 
 /// <summary>
@@ -20,10 +19,16 @@ public sealed class DbConnectionProfile
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    public DbProvider Provider { get; set; } = DbProvider.SqlServer;
+
     /// <summary>Имя, по которому на подключение ссылаются скрипты.</summary>
     public string Name { get; set; } = string.Empty;
 
     public string Server { get; set; } = string.Empty;
+
+    /// <summary>Порт; null — по умолчанию (или указан в самом адресе как «host,port»).</summary>
+    public int? Port { get; set; }
+
     public string Database { get; set; } = string.Empty;
 
     /// <summary>База не указана: подключение к кластеру, базу выбирает скрипт (USE или полное имя).</summary>
@@ -38,15 +43,21 @@ public sealed class DbConnectionProfile
     public int ConnectTimeoutSeconds { get; set; } = 15;
     public int CommandTimeoutSeconds { get; set; } = 60;
 
-    /// <summary>По умолчанию «бой»: незнакомое подключение считаем самым опасным.</summary>
-    public DbEnvironment Environment { get; set; } = DbEnvironment.Prod;
+    /// <summary>
+    /// Среда из старых версий (Prod/Test/Dev). Только для чтения старого файла: при загрузке
+    /// переносится в <see cref="Group"/> и больше не записывается.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonPropertyName("Environment")]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? LegacyEnvironment { get; set; }
 
     /// <summary>Остальные параметры строки подключения (MultiSubnetFailover и т.п.).</summary>
     public string ExtraParameters { get; set; } = string.Empty;
 
-    /// <summary>Группа и регион — задел под запуск по регионам, пока не используются.</summary>
+    /// <summary>Группа в дереве подключений, вложенность через «/» (например «PROD» или «Регионы/Астана»). Пусто — без группы.</summary>
     public string? Group { get; set; }
 
+    /// <summary>Задел под запуск по регионам, пока не используется.</summary>
     public string? Region { get; set; }
 
     public DbConnectionProfile Clone() => (DbConnectionProfile)MemberwiseClone();

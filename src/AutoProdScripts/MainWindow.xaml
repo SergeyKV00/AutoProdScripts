@@ -12,25 +12,34 @@
         Background="{DynamicResource BgBrush}"
         Foreground="{DynamicResource FgBrush}">
   <DockPanel>
+    <!-- Меню зависит от раздела: в «Запросах» нет git и PR. -->
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="Файл">
-        <MenuItem Header="Сохранить" Click="Save_Click" InputGestureText="Ctrl+S"/>
-        <MenuItem Header="Быстрое добавление…" Click="QuickAdd_Click"/>
-        <!--<MenuItem Header="Проанализировать папки и USE" Click="AnalyzeUse_Click"/>
-        <MenuItem Header="Обновить mapping" Click="ReloadMapping_Click"/>-->
-        <MenuItem Header="Открыть папку mapping" Click="OpenMappingFolder_Click"/>
-        <MenuItem Header="Настройки…" Click="Settings_Click"/>
+        <MenuItem x:Name="RepoSaveItem" Header="Сохранить" Click="Save_Click" InputGestureText="Ctrl+S"/>
+        <MenuItem x:Name="RepoQuickAddItem" Header="Быстрое добавление…" Click="QuickAdd_Click"/>
+        <MenuItem x:Name="RepoMappingItem" Header="Открыть папку mapping" Click="OpenMappingFolder_Click"/>
+        <MenuItem x:Name="QueriesNewItem" Header="Новый скрипт" Click="QueriesNew_Click" InputGestureText="Ctrl+N"
+                  Visibility="Collapsed"/>
+        <MenuItem x:Name="QueriesOpenItem" Header="Открыть файл…" Click="QueriesOpen_Click" InputGestureText="Ctrl+O"
+                  Visibility="Collapsed"/>
+        <MenuItem x:Name="QueriesSaveItem" Header="Сохранить в библиотеку" Click="QueriesSave_Click" InputGestureText="Ctrl+S"
+                  Visibility="Collapsed"/>
+        <MenuItem x:Name="QueriesCloseItem" Header="Закрыть вкладку" Click="QueriesClose_Click" InputGestureText="Ctrl+W"
+                  Visibility="Collapsed"/>
+        <MenuItem x:Name="QueriesConnectionsItem" Header="Подключения…" Click="QueriesConnections_Click"
+                  Visibility="Collapsed"/>
         <Separator/>
+        <MenuItem Header="Настройки…" Click="Settings_Click"/>
         <MenuItem Header="Выход" Click="Exit_Click"/>
       </MenuItem>
-      <MenuItem Header="Git">
+      <MenuItem x:Name="GitMenu" Header="Git">
         <MenuItem Header="Sync" Click="Sync_Click"/>
         <MenuItem Header="Pull" Click="Pull_Click"/>
         <MenuItem Header="Новая ветка…" Click="NewBranch_Click"/>
         <MenuItem Header="Переключить ветку…" Click="SwitchBranch_Click"/>
         <MenuItem Header="Статус" Click="Status_Click"/>
       </MenuItem>
-      <MenuItem Header="PR">
+      <MenuItem x:Name="PrMenu" Header="PR">
         <MenuItem Header="Create PR…" Click="CreatePr_Click"/>
         <MenuItem Header="Auto Pull Request" Click="AutoPr_Click"/>
       </MenuItem>
@@ -41,19 +50,11 @@
           <MenuItem x:Name="ThemeGtaItem" Header="GTA VI · Vice City" IsCheckable="True" Click="ThemeGta_Click"/>
         </MenuItem>
       </MenuItem>
-      <MenuItem Header="Настройки" Click="Settings_Click"/>
     </Menu>
 
     <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
       <DockPanel LastChildFill="True">
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock Text="Тема" VerticalAlignment="Center" Margin="0,0,6,0"
-                   Foreground="{DynamicResource FgMutedBrush}"/>
-        <ComboBox x:Name="ThemeCombo" Width="170" ToolTip="Цветовая схема"
-                  DisplayMemberPath="Name"
-                  SelectionChanged="ThemeCombo_SelectionChanged"/>
-      </StackPanel>
       <StackPanel Orientation="Horizontal">
         <RadioButton Content="Репозиторий" IsChecked="True" GroupName="Section"
                      Style="{StaticResource SectionButton}" Click="RepoSection_Click"/>

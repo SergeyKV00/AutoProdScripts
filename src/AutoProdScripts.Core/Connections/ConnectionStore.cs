@@ -56,6 +56,10 @@ public sealed class ConnectionStore
     {
         var copy = profile.Clone();
         copy.Name = copy.Name.Trim();
+        copy.Group = NormalizeGroup(copy.Group);
+        copy.LegacyEnvironment = null;
+        if (copy.Port is <= 0 or > 65535)
+            throw new InvalidOperationException("Порт — число от 1 до 65535.");
         if (copy.Name.Length == 0)
             throw new InvalidOperationException("Укажите имя подключения.");
         if (string.IsNullOrWhiteSpace(copy.Server))
@@ -109,6 +113,8 @@ public sealed class ConnectionStore
         try
         {
             _items.AddRange(JsonSerializer.Deserialize<List<DbConnectionProfile>>(File.ReadAllText(_path), Json) ?? new());
+            if (MigrateEnvironments(_items))
+                TryPersist();
         }
         catch (JsonException)
         {
@@ -116,6 +122,93 @@ public sealed class ConnectionStore
             var backup = $"{_path}.broken-{DateTime.Now:yyyyMMddHHmmss}";
             File.Move(_path, backup);
             LoadError = $"Файл подключений повреждён, сохранён как {backup}.";
+        }
+    }
+
+    /// <summary>Группы, в которых есть подключения, по алфавиту.</summary>
+    public IReadOnlyList<string> Groups() => _items
+        .Select(p => NormalizeGroup(p.Group))
+        .Where(g => g.Length > 0)
+        .Distinct(StringComparer.CurrentCultureIgnoreCase)
+        .Order(StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    public static string NormalizeGroup(string? group) => string.Join('/',
+        (group ?? string.Empty).Split(['/', '\\'],StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+    /// <summary>Переименовать подключение (имя уникально).</summary>
+    public void Rename(Guid id, string name)
+    {
+        var profile = _items.First(p => p.Id == id).Clone();
+        profile.Name = name;
+        Save(profile, null);
+    }
+
+    /// <summary>Перенести подключение в группу; пусто — без группы.</summary>
+    public void MoveToGroup(Guid id, string group)
+    {
+        var profile = _items.First(p => p.Id == id).Clone();
+        profile.Group = group;
+        Save(profile, null);
+    }
+
+    /// <summary>Переименовать группу вместе с вложенными.</summary>
+    public void RenameGroup(string group, string newName)
+    {
+        var from = NormalizeGroup(group);
+        var to = NormalizeGroup(newName);
+        if (from.Length == 0)
+            return;
+        var changed = false;
+        foreach (var profile in _items)
+        {
+            var current = NormalizeGroup(profile.Group);
+            if (string.Equals(current, from, StringComparison.CurrentCultureIgnoreCase))
+                profile.Group = to;
+            else if (current.StartsWith(from + "/", StringComparison.CurrentCultureIgnoreCase))
+                profile.Group = to.Length == 0 ? current[(from.Length + 1)..] : to + current[from.Length..];
+            else
+                continue;
+            changed = true;
+        }
+
+        if (changed)
+            Persist();
+    }
+
+    /// <summary>Среда старых версий становится группой PROD/TEST/DEV.</summary>
+    /// <returns>true — что-то перенесено.</returns>
+    public static bool MigrateEnvironments(IEnumerable<DbConnectionProfile> profiles)
+    {
+        var changed = false;
+        foreach (var profile in profiles.Where(p => p.LegacyEnvironment is not null))
+        {
+            if (string.IsNullOrWhiteSpace(profile.Group))
+            {
+                profile.Group = profile.LegacyEnvironment!.Trim().ToLowerInvariant() switch
+                {
+                    "test" or "1" => "TEST",
+                    "dev" or "2" => "DEV",
+                    _ => "PROD"
+                };
+            }
+
+            profile.LegacyEnvironment = null;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private void TryPersist()
+    {
+        try
+        {
+            Persist();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Перенос повторится при следующем запуске.
         }
     }
 

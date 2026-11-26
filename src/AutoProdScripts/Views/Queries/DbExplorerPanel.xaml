@@ -1,0 +1,46 @@
+<UserControl x:Class="AutoProdScripts.Views.Queries.DbExplorerPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <UserControl.Resources>
+    <Style TargetType="TreeViewItem">
+      <!-- Стандартная тема берёт выравнивание у родительского списка: у узла, созданного в коде,
+           его ещё нет — ошибки привязки в выводе. Значения те же, что у TreeView по умолчанию. -->
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Foreground" Value="{DynamicResource FgBrush}"/>
+      <Setter Property="Padding" Value="1"/>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{DynamicResource SelectionBrush}"/>
+          <Setter Property="Foreground" Value="{DynamicResource OnSelectionBrush}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+  </UserControl.Resources>
+  <DockPanel Background="{DynamicResource PanelBrush}">
+    <Grid DockPanel.Dock="Top" Margin="8,4,8,6">
+      <TextBox x:Name="SearchBox" TextChanged="Search_Changed"
+               ToolTip="Поиск по подключениям и уже загруженным объектам"/>
+      <!-- Поверх поля: не должна перехватывать мышь. -->
+      <TextBlock x:Name="SearchHint" Text="Поиск подключений и объектов" IsHitTestVisible="False"
+                 Margin="8,0" VerticalAlignment="Center" Foreground="{DynamicResource FgMutedBrush}"/>
+    </Grid>
+    <Grid>
+      <TreeView x:Name="Tree" Background="Transparent"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                PreviewMouseRightButtonDown="Tree_PreviewMouseRightButtonDown"
+                PreviewMouseLeftButtonDown="Tree_PreviewMouseLeftButtonDown"
+                PreviewMouseMove="Tree_PreviewMouseMove"
+                MouseDoubleClick="Tree_MouseDoubleClick"
+                PreviewKeyDown="Tree_PreviewKeyDown"
+                ContextMenuOpening="Tree_ContextMenuOpening">
+        <TreeView.ContextMenu>
+          <ContextMenu x:Name="Menu"/>
+        </TreeView.ContextMenu>
+      </TreeView>
+      <!-- Лежит поверх дерева: без IsHitTestVisible="False" перехватывала бы мышь. -->
+      <TextBlock x:Name="EmptyText" Margin="8" TextWrapping="Wrap" VerticalAlignment="Top" IsHitTestVisible="False"
+                 Foreground="{DynamicResource FgMutedBrush}"/>
+    </Grid>
+  </DockPanel>
+</UserControl>

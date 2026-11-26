@@ -3,119 +3,198 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
              xmlns:queries="clr-namespace:AutoProdScripts.Views.Queries">
-  <DockPanel Background="{DynamicResource BgBrush}">
-    <Border x:Name="ScriptToolbar" DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
-      <WrapPanel>
-        <TextBlock Text="Подключение" VerticalAlignment="Center" Margin="4,0,6,0"
-                   Foreground="{DynamicResource FgMutedBrush}"/>
-        <ComboBox x:Name="ConnectionBox" Width="260" SelectionChanged="Connection_SelectionChanged"/>
-        <StackPanel x:Name="RegionControls" Orientation="Horizontal" Visibility="Collapsed">
-          <TextBlock Text="База" VerticalAlignment="Center" Margin="8,0,6,0" Foreground="{DynamicResource FgMutedBrush}"/>
-          <TextBox x:Name="RegionTemplateBox" Width="170" VerticalAlignment="Center" TextChanged="RegionTemplate_Changed"
-                   ToolTip="KMIS → KMIS_ast"/>
-          <queries:RegionPicker x:Name="Regions" Margin="8,0,0,0" VerticalAlignment="Center"/>
-        </StackPanel>
-        <Border x:Name="EnvironmentBadge" CornerRadius="3" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Center"
-                Visibility="Collapsed">
-          <TextBlock x:Name="EnvironmentText" FontWeight="Bold" Foreground="{DynamicResource BgBrush}"/>
-        </Border>
-        <TextBlock x:Name="TargetText" VerticalAlignment="Center" Margin="8,0,0,0" FontWeight="SemiBold"
-                   MaxWidth="320" TextTrimming="CharacterEllipsis"/>
-        <Button x:Name="RunButton" Content="▶ Выполнить (F5)" Click="Run_Click" Margin="16,0,0,0"
-                ToolTip="Выделенное выполняется отдельно"/>
-        <Button x:Name="CancelButton" Content="■ Отмена" Click="Cancel_Click" IsEnabled="False"
-                Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
-        <TextBlock Text="Лимит строк" VerticalAlignment="Center" Margin="16,0,6,0"
-                   Foreground="{DynamicResource FgMutedBrush}"/>
-        <TextBox x:Name="MaxRowsBox" Width="70" Text="10000" VerticalAlignment="Center"/>
-        <Button x:Name="OpenButton" Content="Открыть файл…" Click="Open_Click" Style="{StaticResource ToolbarButton}" Margin="16,0,0,0"/>
-        <Button Content="Подключения…" Click="Connections_Click" Style="{StaticResource ToolbarButton}"/>
-      </WrapPanel>
-    </Border>
-
-    <Grid>
+  <Grid Background="{DynamicResource BgBrush}">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="280" MinWidth="200"/>
       <ColumnDefinition Width="6"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
-    <queries:LibraryPanel x:Name="Library"/>
+
+    <!-- Explorer: открытые редакторы, затем «Подключения» или «Библиотека». -->
+    <DockPanel Grid.Column="0" Background="{DynamicResource PanelBrush}">
+      <DockPanel DockPanel.Dock="Top" Margin="8,8,4,4">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <Button Content="＋" Click="NewConnection_Click" Margin="0" Padding="7,2" Style="{StaticResource ToolbarButton}"
+                  ToolTip="Новое подключение"/>
+          <Button Content="⟳" Click="RefreshExplorer_Click" Margin="0" Padding="7,2" Style="{StaticResource ToolbarButton}"
+                  ToolTip="Обновить дерево объектов"/>
+          <Button Content="⊟" Click="CollapseExplorer_Click" Margin="0" Padding="7,2" Style="{StaticResource ToolbarButton}"
+                  ToolTip="Свернуть все узлы"/>
+          <Button x:Name="ExplorerSettingsButton" Content="⚙" Click="ExplorerSettings_Click" Margin="0" Padding="7,2"
+                  Style="{StaticResource ToolbarButton}" ToolTip="Настройки отображения"/>
+        </StackPanel>
+        <TextBlock Text="EXPLORER" FontWeight="SemiBold" VerticalAlignment="Center"
+                   Foreground="{DynamicResource FgBrush}"/>
+      </DockPanel>
+
+      <!-- Сворачиваемая секция открытых редакторов. -->
+      <DockPanel DockPanel.Dock="Top" Margin="4,0,4,0">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+          <Button Content="＋" Click="New_Click" Margin="0" Padding="6,1" Style="{StaticResource ToolbarButton}"
+                  ToolTip="Новый скрипт (Ctrl+N)"/>
+          <Button Content="📂" Click="Open_Click" Margin="0" Padding="6,1" Style="{StaticResource ToolbarButton}"
+                  ToolTip="Открыть файл .sql в новой вкладке (Ctrl+O)"/>
+        </StackPanel>
+        <Button x:Name="OpenEditorsToggle" Click="OpenEditorsToggle_Click" Margin="0" Padding="4,2"
+                HorizontalContentAlignment="Left" Style="{StaticResource ToolbarButton}"
+                ToolTip="Свернуть или развернуть">
+          <TextBlock x:Name="OpenEditorsTitle" FontWeight="SemiBold" Foreground="{DynamicResource FgMutedBrush}"/>
+        </Button>
+      </DockPanel>
+      <ScrollViewer x:Name="OpenEditorsList" DockPanel.Dock="Top" MaxHeight="220" Margin="4,0,4,4"
+                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="OpenList" Margin="0,2,0,2"/>
+      </ScrollViewer>
+
+      <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="8,6,8,0">
+        <UniformGrid Columns="2">
+          <RadioButton x:Name="ConnectionsViewButton" Content="Подключения" GroupName="ExplorerView" IsChecked="True"
+                       Style="{StaticResource SectionButton}" Click="ExplorerView_Click"/>
+          <RadioButton x:Name="LibraryViewButton" Content="Библиотека" GroupName="ExplorerView"
+                       Style="{StaticResource SectionButton}" Click="ExplorerView_Click"/>
+        </UniformGrid>
+      </Border>
+
+      <Grid>
+        <queries:DbExplorerPanel x:Name="Explorer"/>
+        <queries:LibraryPanel x:Name="Library" Visibility="Collapsed"/>
+      </Grid>
+    </DockPanel>
+
     <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
                   ResizeDirection="Columns" Background="{DynamicResource BorderBrush}"/>
-    <queries:ChainView x:Name="Chain" Grid.Column="2" Visibility="Collapsed"/>
-    <Grid x:Name="ScriptArea" Grid.Column="2">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="*" MinHeight="120"/>
-        <RowDefinition Height="6"/>
-        <RowDefinition Height="*" MinHeight="120"/>
-      </Grid.RowDefinitions>
 
-      <Grid Grid.Row="0">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" MinWidth="320"/>
-          <ColumnDefinition Width="6"/>
-          <ColumnDefinition Width="320" MinWidth="240"/>
-        </Grid.ColumnDefinitions>
+    <DockPanel Grid.Column="2">
+      <!-- Вкладки над редактором. -->
+      <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}" MinHeight="32"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <StackPanel Orientation="Horizontal">
+            <StackPanel x:Name="TabStrip" Orientation="Horizontal"/>
+            <Button Content="＋" Click="New_Click" Margin="2,0" Padding="10,2" VerticalAlignment="Center"
+                    Style="{StaticResource ToolbarButton}" ToolTip="Новый скрипт (Ctrl+N)"/>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
 
-        <DockPanel Grid.Column="0">
-          <Border x:Name="ScriptHeader" DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}" Padding="8,6"
-                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <DockPanel>
-              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="Новый" Click="New_Click" Style="{StaticResource ToolbarButton}"/>
-                <Button Content="Сохранить" Click="Save_Click" ToolTip="Ctrl+S"/>
-                <Button Content="Сохранить как…" Click="SaveAs_Click" Style="{StaticResource ToolbarButton}"/>
-                <Button x:Name="PropertiesButton" Content="Свойства…" Click="Properties_Click"
-                        Style="{StaticResource ToolbarButton}"/>
-              </StackPanel>
-              <StackPanel VerticalAlignment="Center">
-                <TextBlock x:Name="TitleText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                           Foreground="{DynamicResource FgBrush}"/>
-                <TextBlock x:Name="DescriptionText" TextTrimming="CharacterEllipsis" Visibility="Collapsed"
-                           Foreground="{DynamicResource FgMutedBrush}"/>
-              </StackPanel>
-            </DockPanel>
-          </Border>
-          <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBrush}" Padding="8,4">
-            <TextBlock x:Name="CheckText" TextWrapping="Wrap" MaxHeight="60"/>
-          </Border>
-          <avalonEdit:TextEditor x:Name="Editor"
-                                 FontFamily="Consolas" FontSize="13"
-                                 ShowLineNumbers="True" WordWrap="False"
-                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                                 Background="{DynamicResource GlassBgBrush}"
-                                 Foreground="{DynamicResource FgBrush}"
-                                 LineNumbersForeground="{DynamicResource LineNumbersBrush}"/>
-        </DockPanel>
-
-        <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
-                      ResizeDirection="Columns" Background="{DynamicResource BorderBrush}"/>
-
-        <DockPanel Grid.Column="2" Background="{DynamicResource PanelBrush}">
-          <DockPanel DockPanel.Dock="Top" Margin="8,6,8,0">
-            <Button DockPanel.Dock="Right" Content="Очистить" Click="ClearParameters_Click" Margin="0"
-                    Style="{StaticResource ToolbarButton}" ToolTip="Очистить введённые значения"/>
-            <TextBlock Text="ПАРАМЕТРЫ" FontWeight="SemiBold" VerticalAlignment="Center"
-                       Foreground="{DynamicResource FgBrush}"/>
-          </DockPanel>
-          <TextBlock DockPanel.Dock="Bottom" Text="Enter или F5 — выполнить" Margin="8,4"
-                     Foreground="{DynamicResource FgMutedBrush}"/>
-          <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="8,0,8,8">
-              <TextBlock x:Name="NoParametersText" TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}"
-                         Text="Появятся переменные без DECLARE (@id)."/>
-              <StackPanel x:Name="ParametersHost"/>
+      <!-- Подключение и запуск — свои у каждой вкладки. -->
+      <Border x:Name="ScriptToolbar" DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,6">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Подключения…" Click="Connections_Click"
+                  Style="{StaticResource ToolbarButton}" VerticalAlignment="Center"/>
+          <WrapPanel>
+            <TextBlock Text="Подключение" VerticalAlignment="Center" Margin="4,0,6,0"
+                       Foreground="{DynamicResource FgMutedBrush}"/>
+            <ComboBox x:Name="ConnectionBox" Width="260" SelectionChanged="Connection_SelectionChanged"
+                      ToolTip="Подключение этой вкладки. У других вкладок — свои."/>
+            <StackPanel x:Name="RegionControls" Orientation="Horizontal" Visibility="Collapsed">
+              <TextBlock Text="База" VerticalAlignment="Center" Margin="8,0,6,0" Foreground="{DynamicResource FgMutedBrush}"/>
+              <TextBox x:Name="RegionTemplateBox" Width="170" VerticalAlignment="Center" TextChanged="RegionTemplate_Changed"
+                       ToolTip="KMIS → KMIS_ast"/>
+              <queries:RegionPicker x:Name="Regions" Margin="8,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
-          </ScrollViewer>
+            <StackPanel x:Name="DatabaseControls" Orientation="Horizontal" Visibility="Collapsed">
+              <TextBlock Text="База" VerticalAlignment="Center" Margin="8,0,6,0" Foreground="{DynamicResource FgMutedBrush}"/>
+              <ComboBox x:Name="DatabaseBox" Width="200" IsEditable="True" VerticalAlignment="Center"
+                        DropDownOpened="DatabaseBox_DropDownOpened" SelectionChanged="DatabaseBox_SelectionChanged"
+                        LostKeyboardFocus="DatabaseBox_LostKeyboardFocus"
+                        ToolTip="База для этой вкладки: подключение к кластеру без своей базы"/>
+            </StackPanel>
+            <Border x:Name="GroupBadge" CornerRadius="3" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Center"
+                    Visibility="Collapsed" Background="{DynamicResource PanelAltBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+              <TextBlock x:Name="GroupText" FontWeight="SemiBold" Foreground="{DynamicResource FgBrush}"/>
+            </Border>
+            <TextBlock x:Name="TargetText" VerticalAlignment="Center" Margin="8,0,0,0" FontWeight="SemiBold"
+                       MaxWidth="320" TextTrimming="CharacterEllipsis"/>
+            <Button x:Name="RunButton" Content="▶ Выполнить (F5)" Click="Run_Click" Margin="16,0,0,0"
+                    ToolTip="Выделенное выполняется отдельно"/>
+            <Button x:Name="CancelButton" Content="■ Отмена" Click="Cancel_Click" IsEnabled="False"
+                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+            <TextBlock Text="Лимит строк" VerticalAlignment="Center" Margin="16,0,6,0"
+                       Foreground="{DynamicResource FgMutedBrush}"/>
+            <TextBox x:Name="MaxRowsBox" Width="70" Text="10000" VerticalAlignment="Center"/>
+          </WrapPanel>
         </DockPanel>
+      </Border>
+
+      <Grid>
+        <queries:ChainView x:Name="Chain" Visibility="Collapsed"/>
+        <Grid x:Name="ScriptArea">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" MinHeight="120"/>
+            <RowDefinition Height="6"/>
+            <RowDefinition Height="*" MinHeight="120"/>
+          </Grid.RowDefinitions>
+
+          <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" MinWidth="320"/>
+              <ColumnDefinition Width="6"/>
+              <ColumnDefinition Width="320" MinWidth="240"/>
+            </Grid.ColumnDefinitions>
+
+            <DockPanel Grid.Column="0">
+              <Border x:Name="ScriptHeader" DockPanel.Dock="Top" Background="{DynamicResource PanelBrush}" Padding="8,6"
+                      BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                <DockPanel>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Сохранить" Click="Save_Click" ToolTip="Сохранить в библиотеку (Ctrl+S)"/>
+                    <Button Content="Сохранить как…" Click="SaveAs_Click" Style="{StaticResource ToolbarButton}"
+                            ToolTip="Сохранить копией в библиотеку"/>
+                    <Button x:Name="PropertiesButton" Content="Свойства…" Click="Properties_Click"
+                            Style="{StaticResource ToolbarButton}"/>
+                  </StackPanel>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="TitleText" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource FgBrush}"/>
+                    <TextBlock x:Name="DescriptionText" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource FgMutedBrush}"/>
+                  </StackPanel>
+                </DockPanel>
+              </Border>
+              <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBrush}" Padding="8,4">
+                <TextBlock x:Name="CheckText" TextWrapping="Wrap" MaxHeight="60"/>
+              </Border>
+              <avalonEdit:TextEditor x:Name="Editor"
+                                     FontFamily="Consolas" FontSize="13"
+                                     ShowLineNumbers="True" WordWrap="False"
+                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                     Background="{DynamicResource GlassBgBrush}"
+                                     Foreground="{DynamicResource FgBrush}"
+                                     LineNumbersForeground="{DynamicResource LineNumbersBrush}"/>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                          ResizeDirection="Columns" Background="{DynamicResource BorderBrush}"/>
+
+            <DockPanel Grid.Column="2" Background="{DynamicResource PanelBrush}">
+              <DockPanel DockPanel.Dock="Top" Margin="8,6,8,0">
+                <Button DockPanel.Dock="Right" Content="Очистить" Click="ClearParameters_Click" Margin="0"
+                        Style="{StaticResource ToolbarButton}" ToolTip="Очистить введённые значения"/>
+                <TextBlock Text="ПАРАМЕТРЫ" FontWeight="SemiBold" VerticalAlignment="Center"
+                           Foreground="{DynamicResource FgBrush}"/>
+              </DockPanel>
+              <TextBlock DockPanel.Dock="Bottom" Text="Enter или F5 — выполнить" Margin="8,4"
+                         Foreground="{DynamicResource FgMutedBrush}"/>
+              <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="8,0,8,8">
+                  <TextBlock x:Name="NoParametersText" TextWrapping="Wrap" Foreground="{DynamicResource FgMutedBrush}"
+                             Text="Появятся переменные без DECLARE (@id)."/>
+                  <StackPanel x:Name="ParametersHost"/>
+                </StackPanel>
+              </ScrollViewer>
+            </DockPanel>
+          </Grid>
+
+          <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                        ResizeDirection="Rows" Background="{DynamicResource BorderBrush}"/>
+
+          <!-- У каждой вкладки свои результаты: здесь показываются результаты активной. -->
+          <ContentControl x:Name="ResultsHost" Grid.Row="2" Focusable="False"/>
+        </Grid>
       </Grid>
-
-      <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
-                    ResizeDirection="Rows" Background="{DynamicResource BorderBrush}"/>
-
-      <queries:ResultsPanel x:Name="Results" Grid.Row="2"/>
-    </Grid>
-    </Grid>
-  </DockPanel>
+    </DockPanel>
+  </Grid>
 </UserControl>

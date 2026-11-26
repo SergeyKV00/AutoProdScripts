@@ -33,6 +33,11 @@ public partial class ChainView : UserControl
 
     public event Action<bool>? BusyChanged;
 
+    /// <summary>Изменилось название или признак несохранённых правок — для вкладки.</summary>
+    public event Action? TitleChanged;
+
+    public string DisplayName => NameBox.Text.Trim().Length > 0 ? NameBox.Text.Trim() : "Новая цепочка";
+
     public Guid ChainId => _chain.Id;
 
     public bool IsBusy => _running is not null;
@@ -101,9 +106,9 @@ public partial class ChainView : UserControl
 
     private void UpdateTitle()
     {
-        var name = NameBox.Text.Trim().Length > 0 ? NameBox.Text.Trim() : "Новая цепочка";
-        TitleText.Text = "🔗 " + name + (IsModified ? " •" : "");
+        TitleText.Text = "🔗 " + DisplayName + (IsModified ? " •" : "");
         TitleText.ToolTip = _chain.Description.Length > 0 ? _chain.Description : null;
+        TitleChanged?.Invoke();
     }
 
     private void Property_Changed(object sender, TextChangedEventArgs e)
@@ -244,7 +249,7 @@ public partial class ChainView : UserControl
         var current = ScriptConnection.Resolve(step.ConnectionId, step.ConnectionName, connections);
         foreach (var profile in connections)
         {
-            var item = new ComboBoxItem { Content = EnvironmentUi.Option(profile), Tag = profile };
+            var item = new ComboBoxItem { Content = ConnectionUi.Option(profile), Tag = profile };
             box.Items.Add(item);
             if (profile.Id == current?.Id)
                 box.SelectedItem = item;
@@ -411,7 +416,7 @@ public partial class ChainView : UserControl
         ProblemsText.Text = !plan.IsValid
             ? "✖ " + string.Join(Environment.NewLine, plan.Problems.Take(3))
             : noDatabase.Count > 0
-                ? $"⚠ Шаги {string.Join(", ", noDatabase)}: {EnvironmentUi.ClusterWarning}"
+                ? $"⚠ Шаги {string.Join(", ", noDatabase)}: {ConnectionUi.ClusterWarning}"
                 : "✔ Цепочка готова к запуску.";
         ProblemsText.SetResourceReference(TextBlock.ForegroundProperty,
             !plan.IsValid ? "DangerBrush" : noDatabase.Count > 0 ? "WarnBrush" : "SuccessBrush");
@@ -690,7 +695,7 @@ public partial class ChainView : UserControl
                 _ => ("—", "FgMutedBrush")
             };
             var environment = profiles.ElementAtOrDefault(result.Index) is { } profile
-                ? $" · {EnvironmentUi.Title(profile.Environment)} · {EnvironmentUi.Target(profile)}"
+                ? $" · {ConnectionUi.Target(profile)}"
                 : string.Empty;
             var title = $"{result.Index + 1}. {result.Title}  [{result.ConnectionName}{environment}]";
             var line = Text($"{mark} {title} — {result.Message}", brush);

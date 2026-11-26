@@ -491,6 +491,10 @@
     </Style>
 
     <Style TargetType="TreeViewItem">
+      <!-- Стандартная тема берёт выравнивание у родительского списка: у узла, созданного в коде,
+           его ещё нет — ошибки привязки в выводе. Значения те же, что у TreeView по умолчанию. -->
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="Foreground" Value="{DynamicResource FgBrush}"/>
       <Setter Property="Padding" Value="2,1"/>
       <Style.Triggers>
